@@ -2,23 +2,33 @@
 # VPC & SUBNET DEFINITIONS (Mandatory: Resilience & Networking)
 # ---------------------------------------------------------
 
+# Create VPC
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
+
+  tags = {
+    Name = "${var.project_name}-vpc"
+  }
 }
 
+# Create Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-igw"
+  }
 }
 
-# --- Public Subnets (For Load Balancer) ---
+# Create Public Subnets in 2 Availability Zones
 resource "aws_subnet" "public" {
-  count             = 2 # Deployed across two AZs (Mandatory for resilience)
+  count             = 2
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true # Allows public IP assignment
+  map_public_ip_on_launch = true # Allows public IP assignment (for Load Balancer)
 
   tags = {
     Name = "${var.project_name}-public-subnet-${count.index + 1}"
@@ -26,13 +36,13 @@ resource "aws_subnet" "public" {
   }
 }
 
-# --- Private Subnets (For App Servers and Database) ---
+# Create Private Subnets (for App Servers and Database)
 resource "aws_subnet" "private" {
-  count             = 2 # Deployed across two AZs
+  count             = 2
   vpc_id            = aws_vpc.main.id
   # Offset index by 2 (e.g., 10.0.2.0/24, 10.0.3.0/24)
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2) 
-  availability_zone = data.aws_availability_zones.available.names[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index] # Multi-AZ deployment
 
   tags = {
     Name = "${var.project_name}-private-subnet-${count.index + 1}"
@@ -40,14 +50,21 @@ resource "aws_subnet" "private" {
   }
 }
 
-# --- NAT Gateway Setup (Required for Private Subnet Outbound Internet) ---
+# ---------------------------------------------------------
+# ROUTING AND NAT GATEWAY (High Mark Feature)
+# ---------------------------------------------------------
 
-# 1. Elastic IP for the NAT Gateway
+# 1. Create Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
-  vpc = true
+  # FIX: Use domain instead of the deprecated vpc argument
+  domain = "vpc" 
+
+  tags = {
+    Name = "${var.project_name}-nat-eip"
+  }
 }
 
-# 2. NAT Gateway (Placed in the first Public Subnet)
+# 2. Create NAT Gateway (Placed in the first Public Subnet)
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
@@ -57,24 +74,48 @@ resource "aws_nat_gateway" "main" {
   }
 }
 
-# 3. Route Table for Private Subnets
+# 3. Route Table for Public Subnets (Routes to Internet Gateway)
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+}
+
+# 4. Associate Public Subnets with Public Route Table
+resource "aws_route_table_association" "public" {
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# 5. Route Table for Private Subnets (Routes out via NAT Gateway)
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id # Routes traffic out via NAT GW
+    nat_gateway_id = aws_nat_gateway.main.id
   }
 }
 
-# 4. Associate Private Subnets with Private Route Table
+# 6. Associate Private Subnets with Private Route Table
 resource "aws_route_table_association" "private" {
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
 }
 
-# 5. DB Subnet Group (Mandatory for RDS deployment)
+# ---------------------------------------------------------
+# DATABASE SUBNET GROUP (Required for RDS)
+# ---------------------------------------------------------
+
+# Create DB Subnet Group (Uses private subnets for secure deployment)
 resource "aws_db_subnet_group" "main" {
   name        = "${var.project_name}-db-subnet-group"
   subnet_ids  = aws_subnet.private[*].id # Uses all private subnets
+
+  tags = {
+    Name = "${var.project_name}-db-subnet-group"
+  }
 }

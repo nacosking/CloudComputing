@@ -46,6 +46,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   alarm_name                = "${var.project_name}-rds-high-cpu"
   comparison_operator       = "GreaterThanThreshold"
+  evaluation_periods        = "2"
   metric_name               = "CPUUtilization"
   namespace                 = "AWS/RDS"
   threshold                 = "80" 

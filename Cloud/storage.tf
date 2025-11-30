@@ -38,7 +38,8 @@ resource "aws_s3_bucket_public_access_block" "app_storage" {
 
 # Lifecycle policy (Cost Optimization)
 resource "aws_s3_bucket_lifecycle_configuration" "app_storage" {
-  # ... other settings ...
+  bucket = aws_s3_bucket.app_storage.id
+  
   rule {
     id     = "transition-to-cheaper-storage"
     status = "Enabled"
