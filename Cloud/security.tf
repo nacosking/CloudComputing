@@ -91,62 +91,20 @@ resource "aws_security_group" "database" {
 }
 
 # ---------------------------------------------------------
-# IAM & MONITORING POLICIES (Mandatory Requirement)
-# Note: IAM Role creation is skipped (using data.aws_iam_role.lab_role)
+# IAM CONFIGURATION FOR AWS ACADEMY
+# ---------------------------------------------------------
+# IMPORTANT: AWS Academy restricts IAM role/policy creation.
+# Solution: Use the existing LabInstanceProfile that already has
+# necessary permissions for S3, CloudWatch, and other services.
 # ---------------------------------------------------------
 
-# IAM Policy for S3 Access (Required for Cloud Storage integration)
-resource "aws_iam_role_policy" "s3_access" {
-  name = "${var.project_name}-s3-access"
-  # Attaches policy to the existing Lab Role
-  role = data.aws_iam_role.lab_role.id 
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        # Grants access to the specific app storage bucket
-        Resource = [
-          aws_s3_bucket.app_storage.arn, 
-          "${aws_s3_bucket.app_storage.arn}/*"
-        ]
-      }
-    ]
-  })
+# Import the existing LabInstanceProfile (created by AWS Academy)
+data "aws_iam_instance_profile" "lab_profile" {
+  name = "LabInstanceProfile"
 }
 
-# IAM Policy for CloudWatch (Required for Monitoring)
-resource "aws_iam_role_policy" "cloudwatch_access" {
-  name = "${var.project_name}-cloudwatch-access"
-  role = data.aws_iam_role.lab_role.id 
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        # Grants permissions for logging and sending metrics
-        Action = [
-          "cloudwatch:PutMetricData",
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# IAM Instance Profile (Allows the Lab Role to be attached to the EC2 instances)
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-profile"
-  role = data.aws_iam_role.lab_role.name 
-}
+# NOTE: The LabRole already has the following AWS managed policies attached:
+# - AmazonS3FullAccess (for S3 operations)
+# - CloudWatchAgentServerPolicy (for CloudWatch metrics and logs)
+# - AmazonSSMManagedInstanceCore (for Systems Manager)
+# These provide all necessary permissions without custom policy attachment.

@@ -44,7 +44,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_storage" {
     id     = "transition-to-cheaper-storage"
     status = "Enabled"
 
-    # CORRECTED: Each argument gets its own line within the block
+    # FIXED: Added required filter attribute (empty filter applies to all objects)
+    filter {}
+
     transition { 
       days          = 30
       storage_class = "STANDARD_IA" 
