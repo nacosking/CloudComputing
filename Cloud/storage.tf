@@ -38,12 +38,21 @@ resource "aws_s3_bucket_public_access_block" "app_storage" {
 
 # Lifecycle policy (Cost Optimization)
 resource "aws_s3_bucket_lifecycle_configuration" "app_storage" {
-  bucket = aws_s3_bucket.app_storage.id
+  # ... other settings ...
   rule {
     id     = "transition-to-cheaper-storage"
     status = "Enabled"
-    transition { days = 30; storage_class = "STANDARD_IA" }
-    transition { days = 90; storage_class = "GLACIER" }
+
+    # CORRECTED: Each argument gets its own line within the block
+    transition { 
+      days          = 30
+      storage_class = "STANDARD_IA" 
+    }
+    
+    transition { 
+      days          = 90
+      storage_class = "GLACIER" 
+    }
   }
 }
 
