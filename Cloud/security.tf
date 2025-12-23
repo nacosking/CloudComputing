@@ -39,11 +39,11 @@ resource "aws_security_group" "web" {
   description = "Security group for web servers"
   vpc_id      = aws_vpc.main.id
 
-  # Inbound: Allow HTTP (Port 80) ONLY from the ALB
+  # Inbound: Allow HTTP (Port 3000) ONLY from the ALB
   ingress {
     description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
+    from_port       = 3000
+    to_port         = 3000
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }

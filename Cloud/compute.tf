@@ -18,7 +18,7 @@ resource "aws_lb" "main" {
 # Target Group (Defines where the ALB sends traffic and how it checks health)
 resource "aws_lb_target_group" "main" {
   name     = "${var.project_name}-tg"
-  port     = 80
+  port     = 3000
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
@@ -86,7 +86,7 @@ locals {
         export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}"
         export SESSION_SECRET="change-me-session-secret"
         export NODE_ENV=production
-        export PORT=80
+        export PORT=3000
 
         # 8. Start backend server (npm start runs compiled dist/index.cjs)
         nohup npm start > /var/log/app.log 2>&1 &
