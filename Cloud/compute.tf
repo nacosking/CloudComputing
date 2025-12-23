@@ -46,36 +46,72 @@ resource "aws_lb_listener" "http" {
 # ---------------------------------------------------------
 
 # User Data Script (Runs on EC2 boot - Role 2 will modify this for final deployment)
+# ---------------------------------------------------------
+# UPDATED USER DATA (Adds Swap for Build + Debugging)
+# ---------------------------------------------------------
 locals {
   user_data = <<-EOF
         #!/bin/bash
-        # 1. Update System & Install Node.js and git
+        # 1. CREATE SWAP FILE (Prevents "Out of Memory" crashes)
+        dd if=/dev/zero of=/swapfile bs=128M count=16
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        
+        # 2. Install Node 20 & Git
         yum update -y
         curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
         yum install -y nodejs git
-
+        
         # Install CloudWatch Agent
         wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
         rpm -U ./amazon-cloudwatch-agent.rpm
 
-        # 2. Clone Repository
+        # 3. Clone Repo
         cd /opt
         git clone https://github.com/nacosking/CloudComputing.git app
-
-        # 3. Install dependencies and build application (Application folder)
-        cd /opt/app/Application
+        cd app
+        
+        # 4. Build Frontend (Now with Swap space!)
+        cd frontend
         npm install
         npm run build
 
-        # 4. Configure environment for backend
+        # 5. Setup Backend
+        cd ../backend
+        npm install
+        npm run build 
+
+        # 6. Environment Variables
         export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}"
         export SESSION_SECRET="change-me-session-secret"
         export NODE_ENV=production
         export PORT=80
 
-        # 5. Start backend server (npm start runs the compiled dist/index.cjs)
-        npm start > /var/log/app.log 2>&1 &
+        # 7. Start Server
+        # We redirect logs to /var/log/app.log so you can debug
+        nohup npm start > /var/log/app.log 2>&1 &
         EOF
+}
+
+resource "aws_launch_template" "main" {
+  name_prefix            = "${var.project_name}-lt-"
+  image_id               = data.aws_ami.amazon_linux.id
+  instance_type          = var.instance_type
+  
+  # ✅ ADD THIS LINE (Replace "vockey" with YOUR actual key name from AWS Console)
+  key_name               = "vockey"  
+
+  iam_instance_profile {
+    name = data.aws_iam_instance_profile.lab_profile.name 
+  }
+
+  vpc_security_group_ids = [aws_security_group.web.id] 
+  user_data              = base64encode(local.user_data) 
+
+  monitoring {
+    enabled = true
+  }
 }
 
 # Launch Template (Blueprint for the EC2 instances)
