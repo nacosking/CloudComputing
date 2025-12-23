@@ -28,11 +28,11 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
+    unhealthy_threshold = 5    # Increased to allow more retries
+    timeout             = 10   # Increased timeout
     interval            = 30
     path                = "/"     # This checks your Home page
-    matcher             = "200"
+    matcher             = "200,301,302"  # Accept redirects too
     port                = "traffic-port" # Ensures it checks port 5000
   }
 
@@ -75,15 +75,20 @@ resource "aws_launch_template" "main" {
   }
 
   # User data script (Bootstrap script that runs on instance startup)
-  # User data script (Bootstrap script that runs on instance startup)
   user_data = base64encode(<<-EOF
               #!/bin/bash
+              set -e  # Exit on any error
 
-              # 1. Update System (Ubuntu uses apt, not yum)
+              # Log all output for debugging
+              exec > >(tee /var/log/user-data.log) 2>&1
+              echo "Starting bootstrap script..."
+
+              # 1. Update System
               apt-get update -y
+              apt-get upgrade -y
 
               # 2. Install Git and Curl
-              apt-get install -y git curl
+              apt-get install -y git curl build-essential
 
               # 3. Install Node.js (Version 20 for Ubuntu)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -93,20 +98,27 @@ resource "aws_launch_template" "main" {
               npm install -g pm2
 
               # 5. Clone your specific 'testing' branch
-              cd /home/ubuntu   # Note: Ubuntu uses /home/ubuntu, not /home/ec2-user
+              cd /home/ubuntu
               git clone -b testing https://github.com/nacosking/CloudComputing.git app
+              chown -R ubuntu:ubuntu app
 
-              # 6. Install App Dependencies (Corrected Path)
+              # 6. Install App Dependencies
               cd app/ReserveMenu/ReserveMenu
               npm install
 
-              # 7. Start the App using PM2
-              export PORT=5000
-              pm2 start npm --name "reserve-menu" -- run dev
+              # 7. Build the application for production
+              npm run build
 
-              # 8. Save PM2 list so it restarts on reboot
+              # 8. Start the App using PM2 in production mode
+              export PORT=5000
+              export NODE_ENV=production
+              pm2 start npm --name "reserve-menu" -- start
+
+              # 9. Save PM2 list so it restarts on reboot
               pm2 save
-              pm2 startup
+              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+
+              echo "Bootstrap complete!"
               EOF
   )
   update_default_version = true
