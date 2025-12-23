@@ -43,6 +43,7 @@ resource "aws_subnet" "private" {
   # Offset index by 2 (e.g., 10.0.2.0/24, 10.0.3.0/24)
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2) 
   availability_zone = data.aws_availability_zones.available.names[count.index] # Multi-AZ deployment
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "${var.project_name}-private-subnet-${count.index + 1}"
@@ -98,11 +99,11 @@ resource "aws_route_table" "private" {
   }
 }
 
-# 6. Associate Private Subnets with Private Route Table
+# 6. Associate Private Subnets with Public Route Table
 resource "aws_route_table_association" "private" {
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.public.id  # Use public route table
 }
 
 # ---------------------------------------------------------
