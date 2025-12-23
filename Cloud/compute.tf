@@ -114,6 +114,12 @@ resource "aws_launch_template" "main" {
               pm2 startup
               EOF
   )
+  update_default_version = true
+
+  tags = {
+    Name = "${var.project_name}-launch-template"
+  }
+}
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------

@@ -41,7 +41,7 @@ resource "aws_subnet" "private" {
   count             = 2
   vpc_id            = aws_vpc.main.id
   # Offset index by 2 (e.g., 10.0.2.0/24, 10.0.3.0/24)
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2) 
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2)
   availability_zone = data.aws_availability_zones.available.names[count.index] # Multi-AZ deployment
 
   tags = {
@@ -57,7 +57,7 @@ resource "aws_subnet" "private" {
 # 1. Create Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
   # FIX: Use domain instead of the deprecated vpc argument
-  domain = "vpc" 
+  domain = "vpc"
 
   tags = {
     Name = "${var.project_name}-nat-eip"
@@ -109,13 +109,3 @@ resource "aws_route_table_association" "private" {
 # ---------------------------------------------------------
 # DATABASE SUBNET GROUP (Required for RDS)
 # ---------------------------------------------------------
-
-# Create DB Subnet Group (Uses private subnets for secure deployment)
-resource "aws_db_subnet_group" "main" {
-  name        = "${var.project_name}-db-subnet-group"
-  subnet_ids  = aws_subnet.private[*].id # Uses all private subnets
-
-  tags = {
-    Name = "${var.project_name}-db-subnet-group"
-  }
-}
