@@ -39,11 +39,13 @@ resource "aws_security_group" "web" {
   description = "Security group for web servers"
   vpc_id      = aws_vpc.main.id
 
+  # (REMOVED THE INCORRECT MYSQL RULE FROM HERE)
+
   # Inbound: Allow Application Traffic (Port 5000) from the ALB
   ingress {
     description     = "App Port from ALB"
-    from_port       = 5000      # <--- CHANGED TO 5000
-    to_port         = 5000      # <--- CHANGED TO 5000
+    from_port       = 5000
+    to_port         = 5000
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -72,7 +74,18 @@ resource "aws_security_group" "database" {
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
 
-  # Inbound: Allow MySQL (Port 3306) ONLY from the Web SG
+  # --- THIS IS THE CORRECT PLACE FOR THE RULE ---
+  # Inbound: Allow MySQL (Port 3306) from Internet (VS Code)
+  ingress {
+    description = "MySQL from Internet"
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  # ----------------------------------------------
+
+  # Inbound: Allow MySQL (Port 3306) from the Web SG (EC2)
   ingress {
     description     = "MySQL from web servers"
     from_port       = 3306
@@ -81,7 +94,7 @@ resource "aws_security_group" "database" {
     security_groups = [aws_security_group.web.id]
   }
 
-  # Outbound: Allow all (for DB updates/patches)
+  # Outbound: Allow all
   egress {
     from_port   = 0
     to_port     = 0
@@ -93,18 +106,6 @@ resource "aws_security_group" "database" {
 # ---------------------------------------------------------
 # IAM CONFIGURATION FOR AWS ACADEMY
 # ---------------------------------------------------------
-# IMPORTANT: AWS Academy restricts IAM role/policy creation.
-# Solution: Use the existing LabInstanceProfile that already has
-# necessary permissions for S3, CloudWatch, and other services.
-# ---------------------------------------------------------
-
-# Import the existing LabInstanceProfile (created by AWS Academy)
 data "aws_iam_instance_profile" "lab_profile" {
   name = "LabInstanceProfile"
 }
-
-# NOTE: The LabRole already has the following AWS managed policies attached:
-# - AmazonS3FullAccess (for S3 operations)
-# - CloudWatchAgentServerPolicy (for CloudWatch metrics and logs)
-# - AmazonSSMManagedInstanceCore (for Systems Manager)
-# These provide all necessary permissions without custom policy attachment.

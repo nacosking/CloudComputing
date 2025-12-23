@@ -4,8 +4,8 @@
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
 
-  # CHANGE THIS LINE:
-  subnet_ids = aws_subnet.private[*].id
+  # Ensure this points to PUBLIC subnets so your laptop can reach it
+  subnet_ids = aws_subnet.public[*].id
 
   tags = {
     Name = "${var.project_name}-db-subnet-group"
@@ -21,7 +21,9 @@ resource "aws_db_instance" "main" {
   # --- Role 3: Security ---
   allocated_storage        = 20
   storage_encrypted        = true  # ✅ Encryption
-  publicly_accessible      = false # ✅ Explicitly block public internet
+
+  # ✅ CHANGED: Allow public internet access (for VS Code)
+  publicly_accessible      = true
 
   db_name                  = var.db_name
   username                 = var.db_username
@@ -50,7 +52,7 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_id     = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
     username = var.db_username
     password = var.db_password
