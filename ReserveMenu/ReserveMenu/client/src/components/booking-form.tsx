@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { CalendarIcon, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { ImageUpload } from "./ImageUpload";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
@@ -23,6 +24,8 @@ const formSchema = z.object({
 
 export function BookingForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [reservationId, setReservationId] = useState<string | null>(null);
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -31,7 +34,7 @@ export function BookingForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       // Convert date to ISO string for the API
-      const body = { ...values, date: values.date.toISOString() };
+      const body = { ...values, date: values.date.toISOString(), guests: typeof values.guests === 'string' ? parseInt(values.guests, 10) : values.guests };
 
       const res = await fetch('/api/reservations', {
         method: 'POST',
@@ -45,10 +48,41 @@ export function BookingForm() {
         return;
       }
 
-      setIsSubmitted(true);
+      const data = await res.json();
+      setReservationId(data.id);
+      // Move to deposit/payment step
+      setAwaitingPayment(true);
     } catch (err) {
       console.error('Reservation submit error:', err);
       alert('Failed to submit reservation, please try again later.');
+    }
+  }
+
+  async function onUploadComplete(url: string) {
+    if (!reservationId) {
+      alert('Reservation not created yet');
+      return;
+    }
+
+    try {
+      // Tell backend to confirm the reservation
+      const res = await fetch(`/api/reservations/${reservationId}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: url }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        alert(`Failed to confirm reservation: ${json.message || res.statusText}`);
+        return;
+      }
+
+      setIsSubmitted(true);
+      setAwaitingPayment(false);
+    } catch (err) {
+      console.error('Reservation confirm error:', err);
+      alert('Failed to confirm reservation, please try again later.');
     }
   }
 
@@ -216,6 +250,27 @@ export function BookingForm() {
           </Button>
         </form>
       </Form>
+
+      {awaitingPayment && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-6 bg-card p-6 rounded-lg border border-border"
+        >
+          <h4 className="font-semibold mb-3">Deposit Payment</h4>
+          <p className="text-sm text-muted-foreground mb-4">Please upload a photo of your deposit receipt to confirm the reservation.</p>
+
+          <div className="mb-4">
+            <ImageUpload onUpload={onUploadComplete} />
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={() => { setAwaitingPayment(false); setReservationId(null); }} variant="ghost">Cancel</Button>
+          </div>
+        </motion.div>
+      )}
+
     </div>
   );
 }
+
