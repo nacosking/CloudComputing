@@ -56,7 +56,6 @@ resource "aws_subnet" "private" {
 
 # 1. Create Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
-  # FIX: Use domain instead of the deprecated vpc argument
   domain = "vpc" 
 
   tags = {
@@ -107,15 +106,6 @@ resource "aws_route_table_association" "private" {
 }
 
 # ---------------------------------------------------------
-# DATABASE SUBNET GROUP (Required for RDS)
+# REMOVED DUPLICATE DB SUBNET GROUP
+# (This is now correctly located in database.tf)
 # ---------------------------------------------------------
-
-# Create DB Subnet Group (Uses private subnets for secure deployment)
-resource "aws_db_subnet_group" "main" {
-  name        = "${var.project_name}-db-subnet-group"
-  subnet_ids  = aws_subnet.private[*].id # Uses all private subnets
-
-  tags = {
-    Name = "${var.project_name}-db-subnet-group"
-  }
-}
