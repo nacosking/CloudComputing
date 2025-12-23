@@ -89,50 +89,48 @@ resource "aws_launch_template" "main" {
   }
 
   # User data script (Bootstrap script that runs on instance startup)
+  # User data script (Bootstrap script)
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              set -e  # Exit on any error
-
-              # Log all output for debugging
-              exec > >(tee /var/log/user-data.log) 2>&1
-              echo "Starting bootstrap script..."
 
               # 1. Update System
               apt-get update -y
-              apt-get upgrade -y
 
               # 2. Install Git and Curl
-              apt-get install -y git curl build-essential
+              apt-get install -y git curl
 
-              # 3. Install Node.js (Version 20 for Ubuntu)
+              # 3. Install Node.js (Version 20)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
 
-              # 4. Install Process Manager (PM2)
+              # 4. Install PM2
               npm install -g pm2
 
-              # 5. Clone your specific 'testing' branch
+              # 5. Clone your branch
               cd /home/ubuntu
               git clone -b testing https://github.com/nacosking/CloudComputing.git app
-              chown -R ubuntu:ubuntu app
 
               # 6. Install App Dependencies
               cd app/ReserveMenu/ReserveMenu
               npm install
 
-              # 7. Build the application for production
-              npm run build
-
-              # 8. Start the App using PM2 in production mode
+              # 7. Start the App with Environment Variables
               export PORT=5000
-              export NODE_ENV=production
-              pm2 start npm --name "reserve-menu" -- start
+              export S3_BUCKET_NAME="${var.project_name}-app-storage-382146695720"  # Replace with YOUR actual bucket name if different
 
-              # 9. Save PM2 list so it restarts on reboot
+              # --- NEW: DATABASE CONNECTION VARIABLES ---
+              export DB_HOST="${aws_db_instance.main.address}"
+              export DB_USER="${var.db_username}"
+              export DB_PASSWORD="${var.db_password}"
+              export DB_NAME="cloud_project"
+              # ------------------------------------------
+
+              # Start with PM2
+              pm2 start npm --name "reserve-menu" -- run dev
+
+              # 8. Save PM2 list
               pm2 save
-              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
-
-              echo "Bootstrap complete!"
+              pm2 startup
               EOF
   )
   update_default_version = true
