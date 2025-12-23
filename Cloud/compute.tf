@@ -48,23 +48,30 @@ resource "aws_lb_listener" "http" {
 locals {
   user_data = <<-EOF
         #!/bin/bash
+        set -e  # Exit on error
+        exec > /var/log/user-data.log 2>&1  # Log all output
+
         # 1. CREATE SWAP (Still needed for t2.micro)
         dd if=/dev/zero of=/swapfile bs=128M count=16
         chmod 600 /swapfile
         mkswap /swapfile
         swapon /swapfile
 
-        # 2. INSTALL SYSTEM DEPS (AL2023 uses dnf, but yum works too)
-        yum update -y
-        yum install -y git ruby wget
+        # 2. INSTALL SYSTEM DEPS (AL2023 uses dnf)
+        dnf update -y
+        dnf install -y git wget tar
 
-        # 3. INSTALL NODE.JS 20 (Native on AL2023!)
-        # We don't need the external setup script anymore
-        yum install -y nodejs
+        # 3. INSTALL NODE.JS 20 via NodeSource (most reliable method)
+        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+        dnf install -y nodejs
+
+        # Verify installation
+        node --version
+        npm --version
 
         # 4. INSTALL CLOUDWATCH AGENT
         wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-        rpm -U ./amazon-cloudwatch-agent.rpm
+        rpm -U ./amazon-cloudwatch-agent.rpm || true
 
         # 5. CLONE APPLICATION
         cd /opt
