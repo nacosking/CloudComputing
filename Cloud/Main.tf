@@ -54,14 +54,15 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# 3. Amazon Linux 2 AMI
+# 3. Amazon Linux 2023 AMI
 # Automatically finds the latest Linux image ID for EC2 instances.
+# AL2023 supports Node.js 20 (requires GLIBC 2.28+)
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
 
   filter {
     name    = "name"
-    values  = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values  = ["al2023-ami-2023.*-x86_64"]
   }
 }

@@ -48,38 +48,41 @@ resource "aws_lb_listener" "http" {
 locals {
   user_data = <<-EOF
         #!/bin/bash
-        # 1. OPTIONAL: Create swap file to avoid OOM during npm build
+        # 1. CREATE SWAP (Still needed for t2.micro)
         dd if=/dev/zero of=/swapfile bs=128M count=16
         chmod 600 /swapfile
         mkswap /swapfile
         swapon /swapfile
 
-        # 2. Install Node 20 & Git
+        # 2. INSTALL SYSTEM DEPS (AL2023 uses dnf, but yum works too)
         yum update -y
-        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-        yum install -y nodejs git
+        yum install -y git ruby wget
 
-        # Install CloudWatch Agent
+        # 3. INSTALL NODE.JS 20 (Native on AL2023!)
+        # We don't need the external setup script anymore
+        yum install -y nodejs
+
+        # 4. INSTALL CLOUDWATCH AGENT
         wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
         rpm -U ./amazon-cloudwatch-agent.rpm
 
-        # 3. Clone Application repo (cloud_features branch to match your local code)
+        # 5. CLONE APPLICATION
         cd /opt
         git clone --branch testing --single-branch https://github.com/nacosking/CloudComputing.git app
 
-        # 4. Install dependencies and build full app from Application folder
+        # 6. Install dependencies and build full app from Application folder
         cd /opt/app/Application
         npm install
         npm run build
 
-        # 5. Configure environment for backend
+        # 7. Configure environment for backend
         export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}"
         export SESSION_SECRET="change-me-session-secret"
         export NODE_ENV=production
         export PORT=80
 
-        # 6. Start backend server (npm start runs compiled dist/index.cjs)
-        npm start > /var/log/app.log 2>&1 &
+        # 8. Start backend server (npm start runs compiled dist/index.cjs)
+        nohup npm start > /var/log/app.log 2>&1 &
         EOF
 }
 
@@ -102,6 +105,14 @@ resource "aws_launch_template" "main" {
 
   monitoring {
     enabled = true
+  }
+
+  # Add Name tag to EC2 instances created by Auto Scaling
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.project_name}-web-server"
+    }
   }
 }
 
