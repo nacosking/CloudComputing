@@ -2,6 +2,20 @@
 # APPLICATION LOAD BALANCER (Mandatory Requirement)
 # ---------------------------------------------------------
 
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical (The company that makes Ubuntu)
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
 # Create Application Load Balancer
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
@@ -59,7 +73,7 @@ resource "aws_lb_listener" "http" {
 
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
-  image_id      = data.aws_ami.amazon_linux.id
+  image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
 
   # Attach IAM instance profile for S3 and CloudWatch access
