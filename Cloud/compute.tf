@@ -1,46 +1,35 @@
 # ---------------------------------------------------------
-# APPLICATION LOAD BALANCER (Mandatory Requirement)
+# LOAD BALANCER (Mandatory Requirement)
 # ---------------------------------------------------------
-
-# Create Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+  name                = "${var.project_name}-alb"
+  internal            = false # Public-facing ALB
+  load_balancer_type  = "application"
+  security_groups     = [aws_security_group.alb.id]
+  subnets             = aws_subnet.public[*].id # Placed in public subnets
 
-  enable_deletion_protection = false
+  enable_deletion_protection = false # Allows easy cleanup
 
   tags = {
     Name = "${var.project_name}-alb"
   }
 }
 
-# Create Target Group (Routes traffic to EC2 instances)
+# Target Group (Defines where the ALB sends traffic and how it checks health)
 resource "aws_lb_target_group" "main" {
   name     = "${var.project_name}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
-  # Health check configuration
   health_check {
     enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/"
-    matcher             = "200"
-  }
-
-  tags = {
-    Name = "${var.project_name}-target-group"
+    path                = "/" # Checks the root path for a response
+    matcher             = "200" # Expects a 200 OK status
   }
 }
 
-# Create Listener (Forwards HTTP traffic to Target Group)
+# ALB Listener (Listens on port 80 and forwards traffic to the target group)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -53,190 +42,113 @@ resource "aws_lb_listener" "http" {
 }
 
 # ---------------------------------------------------------
-# LAUNCH TEMPLATE (Mandatory Requirement)
+# LAUNCH TEMPLATE & USER DATA (Mandatory Requirement)
 # ---------------------------------------------------------
 
-resource "aws_launch_template" "main" {
-  name_prefix   = "${var.project_name}-lt-"
-  image_id      = data.aws_ami.amazon_linux.id
-  instance_type = var.instance_type
-
-  # Attach IAM instance profile for S3 and CloudWatch access
-  # Uses the existing LabInstanceProfile provided by AWS Academy
-  iam_instance_profile {
-    name = data.aws_iam_instance_profile.lab_profile.name
-  }
-
-  # Network configuration
-  network_interfaces {
-    associate_public_ip_address = false
-    security_groups             = [aws_security_group.web.id]
-  }
-
-  # User data script (Bootstrap script that runs on instance startup)
-  user_data = base64encode(<<-EOF
+# User Data Script (Runs on EC2 boot - Role 2 will modify this for final deployment)
+locals {
+  user_data = <<-EOF
               #!/bin/bash
-              # Update system packages
               yum update -y
-              
-              # Install Apache web server
               yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
               
-              # Install MySQL client
-              yum install -y mysql
-              
-              # Install AWS CLI (if not already installed)
-              yum install -y aws-cli
-              
-              # Install CloudWatch agent
-              wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-              rpm -U ./amazon-cloudwatch-agent.rpm
-              
-              # Create a simple web page with instance metadata
-              TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-              INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
-              AVAILABILITY_ZONE=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone)
-              
-              cat > /var/www/html/index.html <<HTML
+              # Creates a simple web page for verification
+              cat > /var/www/html/index.html <<'HTML'
               <!DOCTYPE html>
               <html>
               <head>
-                  <title>${var.project_name} Application</title>
+                  <title>Cloud Computing Project</title>
                   <style>
                       body {
                           font-family: Arial, sans-serif;
-                          margin: 50px;
-                          background-color: #f0f0f0;
+                          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                          color: white;
+                          display: flex;
+                          justify-content: center;
+                          align-items: center;
+                          height: 100vh;
+                          margin: 0;
                       }
                       .container {
-                          background-color: white;
-                          padding: 30px;
+                          text-align: center;
+                          background: rgba(255,255,255,0.1);
+                          padding: 40px;
                           border-radius: 10px;
-                          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                          backdrop-filter: blur(10px);
                       }
-                      h1 { color: #FF9900; }
-                      .info { margin: 10px 0; }
-                      .label { font-weight: bold; }
                   </style>
               </head>
               <body>
                   <div class="container">
-                      <h1>Welcome to ${var.project_name}</h1>
-                      <p>This application is running on AWS infrastructure managed by Terraform.</p>
-                      <hr>
-                      <div class="info"><span class="label">Instance ID:</span> $INSTANCE_ID</div>
-                      <div class="info"><span class="label">Availability Zone:</span> $AVAILABILITY_ZONE</div>
-                      <div class="info"><span class="label">Environment:</span> ${var.environment}</div>
-                      <div class="info"><span class="label">Team:</span> ${var.team_name}</div>
+                      <h1>🚀 Cloud Computing Project</h1>
+                      <p>Instance ID: $(ec2-metadata --instance-id | cut -d ' ' -f 2)</p>
+                      <p>Availability Zone: $(ec2-metadata --availability-zone | cut -d ' ' -f 2)</p>
+                      <p>Deployed with Terraform</p>
                   </div>
               </body>
               </html>
-HTML
+              HTML
               
-              # Start and enable Apache
-              systemctl start httpd
-              systemctl enable httpd
-              
-              # Configure CloudWatch agent (basic configuration)
-              cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<CWCONFIG
-              {
-                "metrics": {
-                  "namespace": "${var.project_name}",
-                  "metrics_collected": {
-                    "mem": {
-                      "measurement": [
-                        {"name": "mem_used_percent", "unit": "Percent"}
-                      ],
-                      "metrics_collection_interval": 60
-                    },
-                    "disk": {
-                      "measurement": [
-                        {"name": "used_percent", "unit": "Percent"}
-                      ],
-                      "metrics_collection_interval": 60,
-                      "resources": ["*"]
-                    }
-                  }
-                }
-              }
-CWCONFIG
-              
-              # Start CloudWatch agent
-              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-                -a fetch-config \
-                -m ec2 \
-                -s \
-                -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
+              # Install CloudWatch agent (Optional, but recommended for advanced monitoring)
+              wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+              rpm -U ./amazon-cloudwatch-agent.rpm
               EOF
-  )
+}
 
-  # Ensure latest version is used
-  update_default_version = true
+# Launch Template (Blueprint for the EC2 instances)
+resource "aws_launch_template" "main" {
+  name_prefix            = "${var.project_name}-lt-"
+  image_id               = data.aws_ami.amazon_linux.id
+  instance_type          = var.instance_type
 
-  tags = {
-    Name = "${var.project_name}-launch-template"
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name # Attaches S3/CloudWatch permissions
+  }
+
+  vpc_security_group_ids = [aws_security_group.web.id] # Applies App Firewall
+
+  user_data = base64encode(local.user_data) # Runs the startup script
+
+  monitoring {
+    enabled = true
   }
 }
 
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------
-
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.project_name}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name                 = "${var.project_name}-asg"
+  # CRITICAL: Deploy servers in PRIVATE subnets for security
+  vpc_zone_identifier  = aws_subnet.private[*].id 
+  target_group_arns    = [aws_lb_target_group.main.arn]
+  health_check_type    = "ELB"
   health_check_grace_period = 300
 
-  min_size         = var.min_size
-  max_size         = var.max_size
-  desired_capacity = var.desired_capacity
+  min_size             = var.min_size
+  max_size             = var.max_size
+  desired_capacity     = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
-
-  # Instance refresh configuration (for zero-downtime updates)
-  instance_refresh {
-    strategy = "Rolling"
-    preferences {
-      min_healthy_percentage = 50
-    }
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "${var.project_name}-asg-instance"
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "ManagedBy"
-    value               = "AutoScaling"
-    propagate_at_launch = true
-  }
 }
 
-# ---------------------------------------------------------
-# AUTO SCALING POLICIES (Mandatory Requirement)
-# ---------------------------------------------------------
-
-# Scale Up Policy (Triggered by high CPU alarm)
+# Auto Scaling Policy - Scale Up (Mandatory)
 resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.project_name}-scale-up"
-  scaling_adjustment     = 1
+  scaling_adjustment     = 1 # Adds 1 instance
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
-# Scale Down Policy (Triggered by low CPU alarm)
+# Auto Scaling Policy - Scale Down (Mandatory)
 resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.project_name}-scale-down"
-  scaling_adjustment     = -1
+  scaling_adjustment     = -1 # Removes 1 instance
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
