@@ -70,7 +70,7 @@ resource "aws_launch_template" "main" {
 
   # Network configuration
   network_interfaces {
-    associate_public_ip_address = false
+    associate_public_ip_address = true
     security_groups             = [aws_security_group.web.id]
   }
 
@@ -126,7 +126,7 @@ resource "aws_launch_template" "main" {
 
 resource "aws_autoscaling_group" "main" {
   name                = "${var.project_name}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
+  vpc_zone_identifier = aws_subnet.public[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
   health_check_grace_period = 300
