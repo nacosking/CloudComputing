@@ -28,15 +28,33 @@ export function BookingForm() {
     resolver: zodResolver(formSchema),
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // In a real app, this would send data to the backend
-    console.log(values);
-    setIsSubmitted(true);
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+      // Convert date to ISO string for the API
+      const body = { ...values, date: values.date.toISOString() };
+
+      const res = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        alert(`Failed to create reservation: ${json.message || res.statusText}`);
+        return;
+      }
+
+      setIsSubmitted(true);
+    } catch (err) {
+      console.error('Reservation submit error:', err);
+      alert('Failed to submit reservation, please try again later.');
+    }
   }
 
   if (isSubmitted) {
     return (
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="bg-card p-8 md:p-12 rounded-xl shadow-lg text-center border border-border"
