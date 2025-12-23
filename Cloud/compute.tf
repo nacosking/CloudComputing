@@ -79,34 +79,29 @@ resource "aws_launch_template" "main" {
   user_data = base64encode(<<-EOF
               #!/bin/bash
 
-              # 1. Update System
-              yum update -y
+              # 1. Update System (Ubuntu uses apt, not yum)
+              apt-get update -y
 
-              # 2. Install Git
-              yum install -y git
+              # 2. Install Git and Curl
+              apt-get install -y git curl
 
-              # 3. Install Node.js (Version 20)
-              curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-              yum install -y nodejs
+              # 3. Install Node.js (Version 20 for Ubuntu)
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              apt-get install -y nodejs
 
-              # 4. Install Process Manager (PM2) to keep app running
+              # 4. Install Process Manager (PM2)
               npm install -g pm2
 
               # 5. Clone your specific 'testing' branch
-              # REPLACE THE URL BELOW WITH YOUR GITHUB URL
-              cd /home/ec2-user
+              cd /home/ubuntu   # Note: Ubuntu uses /home/ubuntu, not /home/ec2-user
               git clone -b testing https://github.com/nacosking/CloudComputing.git app
 
-              # 6. Install App Dependencies
-              cd app/ReserveMenu/ReserveMenu   # Adjust this path if your folder structure differs!
+              # 6. Install App Dependencies (Corrected Path)
+              cd app/ReserveMenu
               npm install
 
               # 7. Start the App using PM2
-              # We use 'cross-env' and 'tsx' directly or via npm script if it's simpler
-              # Setting PORT=5000 explicitly
               export PORT=5000
-
-              # Start the app in the background
               pm2 start npm --name "reserve-menu" -- run dev
 
               # 8. Save PM2 list so it restarts on reboot
