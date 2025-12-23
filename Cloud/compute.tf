@@ -97,7 +97,7 @@ resource "aws_launch_template" "main" {
               git clone -b testing https://github.com/nacosking/CloudComputing.git app
 
               # 6. Install App Dependencies (Corrected Path)
-              cd app/ReserveMenu
+              cd app/ReserveMenu/ReserveMenu
               npm install
 
               # 7. Start the App using PM2
