@@ -90,6 +90,7 @@ resource "aws_launch_template" "main" {
 
   # User data script (Bootstrap script that runs on instance startup)
   # User data script (Bootstrap script)
+  # User data script (Bootstrap script)
   user_data = base64encode(<<-EOF
               #!/bin/bash
 
