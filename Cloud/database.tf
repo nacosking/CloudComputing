@@ -1,19 +1,10 @@
 # ---------------------------------------------------------
 # RDS DATABASE (Mandatory Requirement)
 # ---------------------------------------------------------
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = var.private_subnet_ids # OR [aws_subnet.private_1.id, aws_subnet.private_2.id]
-
-  tags = {
-    Name = "${var.project_name}-db-subnet-group"
-  }
-}
-
 resource "aws_db_instance" "main" {
   identifier               = "${var.project_name}-db"
-  engine                   = "mysql"
-  engine_version           = "8.0"
+  engine                   = "postgres"
+  engine_version           = "15.4"
   instance_class           = "db.t3.micro"
 
   # --- Role 3: Security ---
@@ -55,5 +46,6 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
     host     = aws_db_instance.main.address
     port     = aws_db_instance.main.port
     dbname   = aws_db_instance.main.db_name
+    engine   = aws_db_instance.main.engine
   })
 }

@@ -48,53 +48,34 @@ resource "aws_lb_listener" "http" {
 # User Data Script (Runs on EC2 boot - Role 2 will modify this for final deployment)
 locals {
   user_data = <<-EOF
-              #!/bin/bash
-              yum update -y
-              yum install -y httpd
-              systemctl start httpd
-              systemctl enable httpd
-              
-              # Creates a simple web page for verification
-              cat > /var/www/html/index.html <<'HTML'
-              <!DOCTYPE html>
-              <html>
-              <head>
-                  <title>Cloud Computing Project</title>
-                  <style>
-                      body {
-                          font-family: Arial, sans-serif;
-                          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                          color: white;
-                          display: flex;
-                          justify-content: center;
-                          align-items: center;
-                          height: 100vh;
-                          margin: 0;
-                      }
-                      .container {
-                          text-align: center;
-                          background: rgba(255,255,255,0.1);
-                          padding: 40px;
-                          border-radius: 10px;
-                          backdrop-filter: blur(10px);
-                      }
-                  </style>
-              </head>
-              <body>
-                  <div class="container">
-                      <h1>🚀 Cloud Computing Project</h1>
-                      <p>Instance ID: $(ec2-metadata --instance-id | cut -d ' ' -f 2)</p>
-                      <p>Availability Zone: $(ec2-metadata --availability-zone | cut -d ' ' -f 2)</p>
-                      <p>Deployed with Terraform</p>
-                  </div>
-              </body>
-              </html>
-              HTML
-              
-              # Install CloudWatch agent (Optional, but recommended for advanced monitoring)
-              wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-              rpm -U ./amazon-cloudwatch-agent.rpm
-              EOF
+        #!/bin/bash
+        # 1. Update System & Install Node.js and git
+        yum update -y
+        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+        yum install -y nodejs git
+
+        # Install CloudWatch Agent
+        wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+        rpm -U ./amazon-cloudwatch-agent.rpm
+
+        # 2. Clone Repository
+        cd /opt
+        git clone https://github.com/nacosking/CloudComputing.git app
+
+        # 3. Install dependencies and build application (Application folder)
+        cd /opt/app/Application
+        npm install
+        npm run build
+
+        # 4. Configure environment for backend
+        export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}"
+        export SESSION_SECRET="change-me-session-secret"
+        export NODE_ENV=production
+        export PORT=80
+
+        # 5. Start backend server (npm start runs the compiled dist/index.cjs)
+        npm start > /var/log/app.log 2>&1 &
+        EOF
 }
 
 # Launch Template (Blueprint for the EC2 instances)
@@ -104,7 +85,7 @@ resource "aws_launch_template" "main" {
   instance_type          = var.instance_type
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name # Attaches S3/CloudWatch permissions
+    name = data.aws_iam_instance_profile.lab_profile.name # Attaches existing LabInstanceProfile permissions
   }
 
   vpc_security_group_ids = [aws_security_group.web.id] # Applies App Firewall

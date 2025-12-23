@@ -72,11 +72,11 @@ resource "aws_security_group" "database" {
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
 
-  # Inbound: Allow MySQL (Port 3306) ONLY from the Web SG
+  # Inbound: Allow Postgres (Port 5432) ONLY from the Web SG
   ingress {
-    description     = "MySQL from web servers"
-    from_port       = 3306
-    to_port         = 3306
+    description     = "Postgres from web servers"
+    from_port       = 5432
+    to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }
