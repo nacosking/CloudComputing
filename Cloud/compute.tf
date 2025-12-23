@@ -59,7 +59,7 @@ resource "aws_lb_listener" "http" {
 
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
-  image_id      = data.aws_ami.amazon_linux.id
+  image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
 
   # Attach IAM instance profile for S3 and CloudWatch access
@@ -75,11 +75,14 @@ resource "aws_launch_template" "main" {
   }
 
   # User data script (Bootstrap script that runs on instance startup)
-  # User data script (Bootstrap script that runs on instance startup)
   user_data = base64encode(<<-EOF
               #!/bin/bash
 
-              # 1. Update System (Ubuntu uses apt, not yum)
+              # Log to a file for debugging
+              exec > >(tee /var/log/user-data.log) 2>&1
+              echo "Starting user-data bootstrap on Ubuntu..."
+
+              # 1. Update System (Ubuntu uses apt)
               apt-get update -y
 
               # 2. Install Git and Curl
@@ -93,20 +96,26 @@ resource "aws_launch_template" "main" {
               npm install -g pm2
 
               # 5. Clone your specific 'testing' branch
-              cd /home/ubuntu   # Note: Ubuntu uses /home/ubuntu, not /home/ec2-user
+              cd /home/ubuntu
               git clone -b testing https://github.com/nacosking/CloudComputing.git app
 
-              # 6. Install App Dependencies (Corrected Path)
+              # 6. Install App Dependencies
               cd app/ReserveMenu/ReserveMenu
               npm install
 
-              # 7. Start the App using PM2
-              export PORT=5000
-              pm2 start npm --name "reserve-menu" -- run dev
+              # 7. Build the application for production
+              npm run build
 
-              # 8. Save PM2 list so it restarts on reboot
+              # 8. Start the App using PM2 on port 5000
+              export PORT=5000
+              export NODE_ENV=production
+              pm2 start npm --name "reserve-menu" -- start
+
+              # 9. Save PM2 list so it restarts on reboot
               pm2 save
-              pm2 startup
+              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+
+              echo "Bootstrap complete on Ubuntu."
               EOF
   )
   update_default_version = true

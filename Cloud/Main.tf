@@ -54,14 +54,19 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# 3. Amazon Linux 2 AMI
-# Automatically finds the latest Linux image ID for EC2 instances.
-data "aws_ami" "amazon_linux" {
+# 3. Ubuntu 24.04 LTS AMI
+# Automatically finds the latest Ubuntu image ID for EC2 instances.
+data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
-    name    = "name"
-    values  = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
