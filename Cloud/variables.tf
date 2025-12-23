@@ -37,14 +37,14 @@ variable "vpc_cidr" {
 variable "instance_type" {
   description = "EC2 instance type (Free tier eligible)"
   type        = string
-  default     = "t2.micro" 
+  default     = "t2.micro"
 }
 
 # Auto Scaling Group settings for resilience (Mandatory Requirement)
 variable "min_size" {
   description = "Minimum number of instances in ASG"
   type        = number
-  default     = 2 
+  default     = 2
 }
 
 variable "max_size" {
@@ -62,7 +62,7 @@ variable "desired_capacity" {
 variable "allowed_ssh_cidr" {
   description = "CIDR blocks allowed to SSH (0.0.0.0/0 for lab debugging)"
   type        = list(string)
-  default     = ["0.0.0.0/0"] 
+  default     = ["0.0.0.0/0"]
 }
 
 # ---------------------------------------------------------
