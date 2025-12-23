@@ -4,7 +4,6 @@
 resource "aws_db_instance" "main" {
   identifier               = "${var.project_name}-db"
   engine                   = "postgres"
-  engine_version           = "16.3"
   instance_class           = "db.t3.micro"
 
   # --- Role 3: Security ---
