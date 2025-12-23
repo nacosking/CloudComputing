@@ -2,6 +2,20 @@
 # APPLICATION LOAD BALANCER (Mandatory Requirement)
 # ---------------------------------------------------------
 
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical (The company that makes Ubuntu)
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
 # Create Application Load Balancer
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
@@ -20,7 +34,7 @@ resource "aws_lb" "main" {
 # Create Target Group (Routes traffic to EC2 instances)
 resource "aws_lb_target_group" "main" {
   name     = "${var.project_name}-tg"
-  port     = 80
+  port     = 5000
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
@@ -28,11 +42,12 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
+    unhealthy_threshold = 5    # Increased to allow more retries
+    timeout             = 10   # Increased timeout
     interval            = 30
-    path                = "/"
-    matcher             = "200"
+    path                = "/"     # This checks your Home page
+    matcher             = "200,301,302"  # Accept redirects too
+    port                = "traffic-port" # Ensures it checks port 5000
   }
 
   tags = {
@@ -58,7 +73,7 @@ resource "aws_lb_listener" "http" {
 
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
-  image_id      = data.aws_ami.amazon_linux.id
+  image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
 
   # Attach IAM instance profile for S3 and CloudWatch access
@@ -69,122 +84,70 @@ resource "aws_launch_template" "main" {
 
   # Network configuration
   network_interfaces {
-    associate_public_ip_address = false
+    associate_public_ip_address = true
     security_groups             = [aws_security_group.web.id]
   }
 
   # User data script (Bootstrap script that runs on instance startup)
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              # Update system packages
-              yum update -y
-              
-              # Install Apache web server
-              yum install -y httpd
-              
-              # Install MySQL client
-              yum install -y mysql
-              
-              # Install AWS CLI (if not already installed)
-              yum install -y aws-cli
-              
-              # Install CloudWatch agent
-              wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-              rpm -U ./amazon-cloudwatch-agent.rpm
-              
-              # Create a simple web page with instance metadata
-              TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-              INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
-              AVAILABILITY_ZONE=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone)
-              
-              cat > /var/www/html/index.html <<HTML
-              <!DOCTYPE html>
-              <html>
-              <head>
-                  <title>${var.project_name} Application</title>
-                  <style>
-                      body {
-                          font-family: Arial, sans-serif;
-                          margin: 50px;
-                          background-color: #f0f0f0;
-                      }
-                      .container {
-                          background-color: white;
-                          padding: 30px;
-                          border-radius: 10px;
-                          box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                      }
-                      h1 { color: #FF9900; }
-                      .info { margin: 10px 0; }
-                      .label { font-weight: bold; }
-                  </style>
-              </head>
-              <body>
-                  <div class="container">
-                      <h1>Welcome to ${var.project_name}</h1>
-                      <p>This application is running on AWS infrastructure managed by Terraform.</p>
-                      <hr>
-                      <div class="info"><span class="label">Instance ID:</span> $INSTANCE_ID</div>
-                      <div class="info"><span class="label">Availability Zone:</span> $AVAILABILITY_ZONE</div>
-                      <div class="info"><span class="label">Environment:</span> ${var.environment}</div>
-                      <div class="info"><span class="label">Team:</span> ${var.team_name}</div>
-                  </div>
-              </body>
-              </html>
-HTML
-              
-              # Start and enable Apache
-              systemctl start httpd
-              systemctl enable httpd
-              
-              # Configure CloudWatch agent (basic configuration)
-              cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<CWCONFIG
-              {
-                "metrics": {
-                  "namespace": "${var.project_name}",
-                  "metrics_collected": {
-                    "mem": {
-                      "measurement": [
-                        {"name": "mem_used_percent", "unit": "Percent"}
-                      ],
-                      "metrics_collection_interval": 60
-                    },
-                    "disk": {
-                      "measurement": [
-                        {"name": "used_percent", "unit": "Percent"}
-                      ],
-                      "metrics_collection_interval": 60,
-                      "resources": ["*"]
-                    }
-                  }
-                }
-              }
-CWCONFIG
-              
-              # Start CloudWatch agent
-              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-                -a fetch-config \
-                -m ec2 \
-                -s \
-                -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
+              set -e  # Exit on any error
+
+              # Log all output for debugging
+              exec > >(tee /var/log/user-data.log) 2>&1
+              echo "Starting bootstrap script..."
+
+              # 1. Update System
+              apt-get update -y
+              apt-get upgrade -y
+
+              # 2. Install Git and Curl
+              apt-get install -y git curl build-essential
+
+              # 3. Install Node.js (Version 20 for Ubuntu)
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              apt-get install -y nodejs
+
+              # 4. Install Process Manager (PM2)
+              npm install -g pm2
+
+              # 5. Clone your specific 'testing' branch
+              cd /home/ubuntu
+              git clone -b testing https://github.com/nacosking/CloudComputing.git app
+              chown -R ubuntu:ubuntu app
+
+              # 6. Install App Dependencies
+              cd app/ReserveMenu/ReserveMenu
+              npm install
+
+              # 7. Build the application for production
+              npm run build
+
+              # 8. Start the App using PM2 in production mode
+              export PORT=5000
+              export NODE_ENV=production
+              pm2 start npm --name "reserve-menu" -- start
+
+              # 9. Save PM2 list so it restarts on reboot
+              pm2 save
+              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+
+              echo "Bootstrap complete!"
               EOF
   )
-
-  # Ensure latest version is used
   update_default_version = true
 
   tags = {
     Name = "${var.project_name}-launch-template"
   }
 }
-
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------
 
 resource "aws_autoscaling_group" "main" {
   name                = "${var.project_name}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
+  vpc_zone_identifier = aws_subnet.public[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
   health_check_grace_period = 300

@@ -39,11 +39,11 @@ resource "aws_security_group" "web" {
   description = "Security group for web servers"
   vpc_id      = aws_vpc.main.id
 
-  # Inbound: Allow HTTP (Port 80) ONLY from the ALB
+  # Inbound: Allow Application Traffic (Port 5000) from the ALB
   ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
+    description     = "App Port from ALB"
+    from_port       = 5000      # <--- CHANGED TO 5000
+    to_port         = 5000      # <--- CHANGED TO 5000
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -80,7 +80,7 @@ resource "aws_security_group" "database" {
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }
-  
+
   # Outbound: Allow all (for DB updates/patches)
   egress {
     from_port   = 0
