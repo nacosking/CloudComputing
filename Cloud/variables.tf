@@ -71,7 +71,7 @@ variable "allowed_ssh_cidr" {
 variable "db_username" {
   description = "Database master username"
   type        = string
-  default     = "admin"
+  default     = "dbadmin"
   sensitive   = true # Hides value in logs
 }
 
