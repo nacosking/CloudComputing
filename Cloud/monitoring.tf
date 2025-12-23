@@ -11,7 +11,7 @@ resource "aws_sns_topic" "alerts" {
 resource "aws_sns_topic_subscription" "email_alerts" {
   topic_arn = aws_sns_topic.alerts.arn
   protocol  = "email"
-  endpoint  = "your-email@example.com" # CRITICAL: Change this to your email and CONFIRM subscription
+  endpoint  = "ianteoh1911@gmail.com" # CRITICAL: Change this to your email and CONFIRM subscription
 }
 
 # Alarm: High CPU Utilization (Trigger for Auto Scaling UP)

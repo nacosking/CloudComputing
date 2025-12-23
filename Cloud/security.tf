@@ -80,7 +80,7 @@ resource "aws_security_group" "database" {
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }
-  
+
   # Outbound: Allow all (for DB updates/patches)
   egress {
     from_port   = 0
