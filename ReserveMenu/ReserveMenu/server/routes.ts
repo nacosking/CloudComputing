@@ -28,8 +28,9 @@ export async function registerRoutes(
       const bucket = process.env.S3_BUCKET_NAME || "cloud-project-app-storage-382146695720";
       console.log(`Using S3 bucket for uploads: ${bucket}`);
 
-      // Use a unique key for the uploaded image
-      const key = `images/${Date.now()}-${randomUUID()}-${req.file.originalname}`;
+      // Use a unique key for the uploaded confirmation image
+      // Store confirmation images in the 'confirmations/' folder in S3
+      const key = `confirmations/${Date.now()}-${randomUUID()}-${req.file.originalname}`;
 
       // Send the file to AWS S3 (using your s3.ts logic)
       const imageUrl = await uploadToS3(bucket, key, req.file.buffer);
@@ -135,6 +136,18 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error('Get reservation error:', err);
       res.status(500).json({ message: err?.message || 'Failed to read reservation' });
+    }
+  });
+
+  // List all reservations from RDS database
+  app.get('/api/reservations', async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const reservations = await listReservations(limit);
+      res.json(reservations);
+    } catch (err: any) {
+      console.error('List reservations error:', err);
+      res.status(500).json({ message: err?.message || 'Failed to list reservations' });
     }
   });
 

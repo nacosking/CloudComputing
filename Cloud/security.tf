@@ -75,21 +75,21 @@ resource "aws_security_group" "database" {
   vpc_id      = aws_vpc.main.id
 
   # --- THIS IS THE CORRECT PLACE FOR THE RULE ---
-  # Inbound: Allow MySQL (Port 3306) from Internet (VS Code)
+  # Inbound: Allow PostgreSQL (Port 5432) from Internet (VS Code)
   ingress {
-    description = "MySQL from Internet"
-    from_port   = 3306
-    to_port     = 3306
+    description = "PostgreSQL from Internet"
+    from_port   = 5432
+    to_port     = 5432
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
   # ----------------------------------------------
 
-  # Inbound: Allow MySQL (Port 3306) from the Web SG (EC2)
+  # Inbound: Allow PostgreSQL (Port 5432) from the Web SG (EC2)
   ingress {
-    description     = "MySQL from web servers"
-    from_port       = 3306
-    to_port         = 3306
+    description     = "PostgreSQL from web servers"
+    from_port       = 5432
+    to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }

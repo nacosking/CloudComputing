@@ -60,6 +60,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Initialize database schema (create tables if they don't exist)
+  try {
+    const { initializeDatabase } = await import("./db");
+    await initializeDatabase();
+    log("Database initialized successfully", "database");
+  } catch (err) {
+    log(`Database initialization failed: ${err}`, "database");
+    // Continue anyway - the app may still work for non-DB routes
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

@@ -123,9 +123,22 @@ resource "aws_launch_template" "main" {
               # 7. Build the application for production
               npm run build
 
-              # 8. Start the App using PM2 in production mode
+              # 8. Start the App using PM2 in production mode with environment variables
               export PORT=5000
               export NODE_ENV=production
+              export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
+              export S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
+              export AWS_REGION="${var.aws_region}"
+              
+              # Create .env file for PM2 to use
+              cat > /home/ubuntu/app/ReserveMenu/ReserveMenu/.env <<ENVFILE
+              PORT=5000
+              NODE_ENV=production
+              DATABASE_URL=postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}
+              S3_BUCKET_NAME=${aws_s3_bucket.app_storage.id}
+              AWS_REGION=${var.aws_region}
+              ENVFILE
+              
               pm2 start npm --name "reserve-menu" -- start
 
               # 9. Save PM2 list so it restarts on reboot
