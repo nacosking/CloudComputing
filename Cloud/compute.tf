@@ -63,9 +63,9 @@ locals {
         wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
         rpm -U ./amazon-cloudwatch-agent.rpm
 
-        # 3. Clone Application repo
+        # 3. Clone Application repo (cloud_features branch to match your local code)
         cd /opt
-        git clone https://github.com/nacosking/CloudComputing.git app
+        git clone --branch testing --single-branch https://github.com/nacosking/CloudComputing.git app
 
         # 4. Install dependencies and build full app from Application folder
         cd /opt/app/Application
