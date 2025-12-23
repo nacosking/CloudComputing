@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
 import { uploadToS3 } from "./s3";
+import { randomUUID } from "crypto";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -22,8 +23,16 @@ export async function registerRoutes(
         return res.status(400).json({ message: "No file uploaded" });
       }
 
+      // Determine bucket name (from environment, injected by Terraform in production)
+      const bucket =
+        process.env.S3_BUCKET_NAME ||
+        "cloud-project-app-storage-382146695720"; // fallback for local/dev
+
+      // Generate a unique key for this image
+      const key = `images/${Date.now()}-${randomUUID()}-${req.file.originalname}`;
+
       // Send the file to AWS S3 (using your s3.ts logic)
-      const imageUrl = await uploadToS3(req.file);
+      const imageUrl = await uploadToS3(bucket, key, req.file.buffer);
 
       // Return the S3 URL to the frontend so it can display the image
       res.json({ url: imageUrl });

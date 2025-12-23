@@ -106,12 +106,16 @@ resource "aws_launch_template" "main" {
               # 7. Build the application for production
               npm run build
 
-              # 8. Start the App using PM2 on port 5000
+              # 8. Environment variables for the app
               export PORT=5000
               export NODE_ENV=production
+              export S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
+              export AWS_REGION="${var.aws_region}"
+
+              # 9. Start the App using PM2 on port 5000
               pm2 start npm --name "reserve-menu" -- start
 
-              # 9. Save PM2 list so it restarts on reboot
+              # 10. Save PM2 list so it restarts on reboot
               pm2 save
               env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
 
