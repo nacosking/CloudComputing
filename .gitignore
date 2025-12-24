@@ -34,3 +34,10 @@ terraform.rc
 
 # Ignore lock files (you may want to commit this in production)
 .terraform.lock.hcl
+
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
