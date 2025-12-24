@@ -26,6 +26,8 @@ export interface IStorage {
 
   // Reservation methods
   createReservation(reservation: InsertReservation): Promise<Reservation>;
+  // NEW: Method to update the QR URL
+  updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation>;
 
   // Seed/Admin methods
   createCategory(category: InsertCategory): Promise<Category>;
@@ -82,9 +84,22 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
+  // Reservation implementation
   async createReservation(insertReservation: InsertReservation): Promise<Reservation> {
     const [reservation] = await db.insert(reservations).values(insertReservation).returning();
     return reservation;
+  }
+
+  // NEW: Implementation for updating the QR URL
+  async updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation> {
+    const [updated] = await db
+      .update(reservations)
+      .set({ qrUrl })
+      .where(eq(reservations.id, id))
+      .returning();
+
+    if (!updated) throw new Error("Reservation not found");
+    return updated;
   }
 
   async createCategory(category: InsertCategory): Promise<Category> {

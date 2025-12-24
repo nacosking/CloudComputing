@@ -4,6 +4,10 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { insertReservationSchema } from "@shared/schema";
 import { z } from "zod";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import QRCode from "qrcode";
+
+const s3Client = new S3Client({ region: "us-east-1" });
 
 export async function registerRoutes(
   httpServer: Server,
@@ -39,68 +43,42 @@ export async function registerRoutes(
   // Reservation Routes
   app.post("/api/reservations", async (req, res) => {
     try {
+      // 1. Validate Input
       const input = insertReservationSchema.parse(req.body);
+
+      // 2. Save Initial Reservation to RDS
       const reservation = await storage.createReservation(input);
-      res.status(201).json(reservation);
+
+      // 3. Generate QR Code as a Buffer
+      // We encode the reservation ID so the staff can scan it later
+      const qrData = JSON.stringify({ id: reservation.id, name: reservation.name });
+      const qrBuffer = await QRCode.toBuffer(qrData);
+
+      // 4. Upload to S3 using User-Specific Folder
+      const bucketName = process.env.S3_BUCKET_NAME;
+      const s3Key = `users/${req.user?.id || 'guest'}/reservations/${reservation.id}/qr.png`;
+
+      await s3Client.send(new PutObjectCommand({
+        Bucket: bucketName,
+        Key: s3Key,
+        Body: qrBuffer,
+        ContentType: "image/png",
+      }));
+
+      // 5. Construct URL and Update Reservation in DB
+      const qrUrl = `https://${bucketName}.s3.amazonaws.com/${s3Key}`;
+      const updatedReservation = await storage.updateReservationQrUrl(reservation.id, qrUrl);
+
+      res.status(201).json(updatedReservation);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return res.status(400).json({
-          message: err.errors[0].message,
-          field: err.errors[0].path.join('.'),
-        });
+        return res.status(400).json({ message: err.errors[0].message });
       }
-      throw err;
+      console.error("S3/QR Error:", err);
+      res.status(500).json({ message: "Failed to process reservation" });
     }
   });
 
-  // Seed the database if empty
   await seedDatabase();
-
   return httpServer;
-}
-
-export async function seedDatabase() {
-  const categories = await storage.getCategories();
-  if (categories.length === 0) {
-    const starters = await storage.createCategory({ name: "Starters", slug: "starters" });
-    const mains = await storage.createCategory({ name: "Mains", slug: "mains" });
-    const desserts = await storage.createCategory({ name: "Desserts", slug: "desserts" });
-    const drinks = await storage.createCategory({ name: "Drinks", slug: "drinks" });
-
-    await storage.createMenuItem({
-      categoryId: starters.id,
-      name: "Bruschetta",
-      description: "Grilled bread rubbed with garlic and topped with olive oil and salt.",
-      price: 800,
-      available: true,
-      imageUrl: "https://images.unsplash.com/photo-1572695157363-bc3a58a6ae28?w=800&auto=format&fit=crop"
-    });
-
-    await storage.createMenuItem({
-      categoryId: mains.id,
-      name: "Grilled Salmon",
-      description: "Fresh atlantic salmon with roasted vegetables.",
-      price: 2400,
-      available: true,
-      imageUrl: "https://images.unsplash.com/photo-1485921325833-c519f76c4974?w=800&auto=format&fit=crop"
-    });
-    
-    await storage.createMenuItem({
-      categoryId: mains.id,
-      name: "Ribeye Steak",
-      description: "12oz ribeye steak cooked to perfection.",
-      price: 3200,
-      available: true,
-      imageUrl: "https://images.unsplash.com/photo-1600891964092-4316c288032e?w=800&auto=format&fit=crop"
-    });
-
-    await storage.createMenuItem({
-      categoryId: desserts.id,
-      name: "Tiramisu",
-      description: "Coffee-flavoured Italian dessert.",
-      price: 900,
-      available: true,
-      imageUrl: "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=800&auto=format&fit=crop"
-    });
-  }
 }
