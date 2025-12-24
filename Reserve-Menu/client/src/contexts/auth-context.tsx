@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const storedUser = localStorage.getItem("lumiere_user");
     const storedReservations = localStorage.getItem("lumiere_reservations");
-    
+
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
@@ -76,20 +76,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("lumiere_user");
   };
 
-  const addReservation = (reservation: Omit<Reservation, "id" | "userId" | "createdAt">) => {
-    if (!user) throw new Error("User not authenticated");
+  // Look for this in src/contexts/auth-context.tsx
+  const addReservation = async (reservationData) => {
+    try {
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(reservationData),
+      });
 
-    const newReservation: Reservation = {
-      ...reservation,
-      id: `res_${Date.now()}`,
-      userId: user.id,
-      createdAt: new Date().toISOString(),
-      paid: false,
-    };
+      if (!response.ok) {
+        throw new Error("Failed to save reservation");
+      }
 
-    setReservations([...reservations, newReservation]);
-    setLastReservation(newReservation);
-    return newReservation;
+      const savedReservation = await response.json();
+      // Update your local state here if needed
+    } catch (error) {
+      console.error("Error saving reservation:", error);
+    }
   };
 
   const cancelReservation = (reservationId: string) => {
