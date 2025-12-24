@@ -67,15 +67,6 @@ resource "aws_launch_template" "main" {
     security_groups             = [aws_security_group.web.id]
   }
 
-  Here is the full, corrected user_data block for your compute.tf file.
-
-This version includes the PM2 fix we discovered (explicitly setting the home folder) and the Database Connection setup.
-
-📋 Copy this into your compute.tf
-Replace your current user_data = ... section with this exact block:
-
-Terraform
-
   user_data = base64encode(<<-EOF
               #!/bin/bash
               
