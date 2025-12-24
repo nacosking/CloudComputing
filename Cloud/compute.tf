@@ -1,40 +1,7 @@
 # ---------------------------------------------------------
-# TERRAFORM SETTINGS & PROVIDER
+# DATA SOURCES (Only those needed for Compute)
 # ---------------------------------------------------------
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      Team        = var.team_name
-      Owner       = "Student-Group-04"
-      ManagedBy   = "Terraform"
-    }
-  }
-}
-
-# ---------------------------------------------------------
-# DATA SOURCES
-# ---------------------------------------------------------
-data "aws_availability_zones" "available" {
-  state = "available"
-}
+# Note: "aws_availability_zones" was removed because it is in Main.tf
 
 data "aws_caller_identity" "current" {}
 
@@ -42,7 +9,7 @@ data "aws_iam_instance_profile" "lab_profile" {
   name = "LabInstanceProfile"
 }
 
-# Consolidated AMI Search: Ubuntu 24.04 LTS
+# AMI Search: Ubuntu 24.04 LTS
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
@@ -56,79 +23,6 @@ data "aws_ami" "ubuntu" {
     name   = "virtualization-type"
     values = ["hvm"]
   }
-}
-
-# ---------------------------------------------------------
-# NETWORKING (VPC, Subnets, IGW, NAT)
-# ---------------------------------------------------------
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-  tags = { Name = "${var.project_name}-vpc" }
-}
-
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-  tags   = { Name = "${var.project_name}-igw" }
-}
-
-resource "aws_subnet" "public" {
-  count                   = 2
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-  tags = { Name = "${var.project_name}-public-${count.index + 1}" }
-}
-
-resource "aws_subnet" "private" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2)
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags = { Name = "${var.project_name}-private-${count.index + 1}" }
-}
-
-# NAT Gateway for Private Subnets
-resource "aws_eip" "nat" {
-  domain = "vpc" # Fixed from deprecated 'vpc = true'
-  tags   = { Name = "${var.project_name}-nat-eip" }
-}
-
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-  tags          = { Name = "${var.project_name}-nat-gw" }
-}
-
-# Routing
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-}
-
-resource "aws_route_table_association" "public" {
-  count          = 2
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
-  }
-}
-
-resource "aws_route_table_association" "private" {
-  count          = 2
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
 }
 
 # ---------------------------------------------------------
@@ -193,7 +87,7 @@ resource "aws_lb_target_group" "main" {
     path                = "/"
     port                = "5000"
     protocol            = "HTTP"
-    matcher             = "200-399" # Acceptable range for success/redirects
+    matcher             = "200-399"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     timeout             = 5
@@ -225,6 +119,7 @@ resource "aws_launch_template" "main" {
     security_groups             = [aws_security_group.web.id]
   }
 
+  # IMPORTANT: This User Data installs dependencies and runs the app
   user_data = base64encode(<<-EOF
               #!/bin/bash
               set -e
@@ -246,6 +141,9 @@ resource "aws_launch_template" "main" {
 
               export PORT=5000
               export NODE_ENV=production
+              # NOTE: We use your local SQLite database for simplicity in this demo
+              # Ideally, you would use an RDS endpoint here.
+
               pm2 start npm --name "reserve-menu" -- start
               pm2 save
               env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
@@ -254,13 +152,13 @@ resource "aws_launch_template" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                      = "${var.project_name}-asg"
-  vpc_zone_identifier       = aws_subnet.public[*].id # Deploy in public subnets for simpler reachability
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
-  min_size                  = var.min_size
-  max_size                  = var.max_size
-  desired_capacity          = var.desired_capacity
+  name                = "${var.project_name}-asg"
+  vpc_zone_identifier = aws_subnet.public[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
+  min_size            = var.min_size
+  max_size            = var.max_size
+  desired_capacity    = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -281,30 +179,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_storage" {
   rule {
     id     = "archive"
     status = "Enabled"
-    filter { prefix = "" } # Fixed empty filter block
+    filter { prefix = "" }
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
     }
   }
-}
-
-# ---------------------------------------------------------
-# VARIABLES
-# ---------------------------------------------------------
-variable "aws_region" { default = "us-east-1" }
-variable "project_name" { default = "cloud-project" }
-variable "environment" { default = "dev" }
-variable "team_name" { default = "team-1" }
-variable "vpc_cidr" { default = "10.0.0.0/16" }
-variable "instance_type" { default = "t2.micro" }
-variable "min_size" { default = 2 }
-variable "max_size" { default = 4 }
-variable "desired_capacity" { default = 2 }
-
-# ---------------------------------------------------------
-# OUTPUTS
-# ---------------------------------------------------------
-output "application_url" {
-  value = "http://${aws_lb.main.dns_name}"
 }
