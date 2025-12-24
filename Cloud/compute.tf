@@ -71,13 +71,16 @@ resource "aws_lb_listener" "http" {
 # LAUNCH TEMPLATE (Mandatory Requirement)
 # ---------------------------------------------------------
 
+# ---------------------------------------------------------
+# LAUNCH TEMPLATE (Mandatory Requirement)
+# ---------------------------------------------------------
+
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
   image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
 
   # Attach IAM instance profile for S3 and CloudWatch access
-  # Uses the existing LabInstanceProfile provided by AWS Academy
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
@@ -90,92 +93,78 @@ resource "aws_launch_template" "main" {
 
   # User data script (Bootstrap script that runs on instance startup)
   user_data = base64encode(<<-EOF
-#!/bin/bash
-set -e
-exec > >(tee /var/log/user-data.log) 2>&1
-echo "=== Starting bootstrap at $(date) ==="
+    #!/bin/bash
+    exec > /var/log/user-data.log 2>&1
+    set -e
 
-# 1. Update System
-echo "Updating system..."
-apt-get update -y
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+    echo "=== Starting bootstrap at $(date) ==="
 
-# 2. Install Dependencies
-echo "Installing dependencies..."
-apt-get install -y git curl build-essential
+    # 1. Install System Dependencies
+    apt-get update -y
+    apt-get install -y nodejs npm git wget postgresql-client
 
-# 3. Install Node.js 20
-echo "Installing Node.js..."
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt-get install -y nodejs
+    # 2. Install PM2 globally
+    npm install -g pm2
 
-# 4. Install PM2
-echo "Installing PM2..."
-npm install -g pm2
+    # 3. Clone Repository
+    # We clone into /home/ubuntu/app
+    cd /home/ubuntu
+    rm -rf app
+    git clone https://github.com/nacosking/CloudComputing.git app
 
-# 5. Clone Repository
-echo "Cloning repository..."
-cd /home/ubuntu
-rm -rf app  # Remove if exists
-git clone -b testing https://github.com/nacosking/CloudComputing.git app
-chown -R ubuntu:ubuntu app
+    # 4. Fix Permissions (CRITICAL)
+    chown -R ubuntu:ubuntu /home/ubuntu/app
 
-# 6. Setup Application
-echo "Setting up application..."
-cd /home/ubuntu/app/Application
+    # 5. Build and Start the App (AS THE UBUNTU USER)
+    # Using 'su - ubuntu -c' ensures environments variables are set for the correct user
+    su - ubuntu -c '
+        cd /home/ubuntu/app/Application
+        
+        echo "Installing dependencies..."
+        npm install
+        
+        echo "Building app..."
+        npm run build
 
-# Wait for RDS to be ready
-echo "Waiting for database..."
-sleep 30
+        # Configure Environment Variables
+        export PORT=5000
+        export NODE_ENV=production
+        # Note: using postgres:// matches what worked manually
+        export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
+        export SESSION_SECRET="change-me-session-secret"
 
-# Set environment variables
-export PORT=5000
-export NODE_ENV=production
-export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
-export SESSION_SECRET="change-me-session-secret-$(openssl rand -hex 32)"
+        # 6. Database Connection Retry Loop (Resilience)
+        # This prevents the app from crashing if the DB isn't ready yet
+        echo "Waiting for Database to be ready..."
+        until pg_isready -d $DATABASE_URL; do
+          echo "Database unavailable - sleeping..."
+          sleep 5
+        done
+        echo "Database is up!"
 
-# Install dependencies
-echo "Installing npm packages..."
-npm install
+        # 7. Start with PM2 using the CORRECT file (.cjs)
+        echo "Starting PM2..."
+        pm2 start dist/index.cjs --name "backend"
+        
+        # Freeze the process list for restarts
+        pm2 save
+    '
 
-# Run database migrations
-echo "Running database migrations..."
-npx drizzle-kit push || echo "Migration failed, continuing..."
-
-# Build the application
-echo "Building application..."
-npm run build
-
-# 7. Start Application with PM2
-echo "Starting application..."
-sudo -u ubuntu bash <<'USEREOF'
-cd /home/ubuntu/app/Application
-export PORT=5000
-export NODE_ENV=production
-export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
-export SESSION_SECRET="change-me-session-secret"
-
-pm2 start npm --name "reserve-menu" -- start
-pm2 save
-USEREOF
-
-# 8. Setup PM2 startup
-env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
-
-# 9. Create health check endpoint test
-echo "Testing application..."
-sleep 10
-curl -f http://localhost:5000 || echo "App not responding yet"
-
-echo "=== Bootstrap complete at $(date) ==="
-EOF
+    # 8. Setup PM2 Startup System (Run as Root)
+    env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
+    systemctl start pm2-ubuntu
+    
+    echo "=== Bootstrap complete at $(date) ==="
+  EOF
   )
+
   update_default_version = true
 
   tags = {
     Name = "${var.project_name}-launch-template"
   }
 }
+
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------
