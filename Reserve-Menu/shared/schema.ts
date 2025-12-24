@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
+
 // 1. Auth Tables
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
