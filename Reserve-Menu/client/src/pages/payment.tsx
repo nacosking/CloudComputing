@@ -24,17 +24,15 @@ export default function PaymentPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // --- FIX: Get the data passed from BookingForm ---
-  const bookingData = window.history.state?.bookingData;
+  // Get the last reservation from context
+  const { lastReservation } = useAuth();
 
-  // If no data exists, only then redirect to home
-  if (!bookingData) {
+  if (!lastReservation) {
     navigate("/");
     return null;
   }
 
-  // Use bookingData for the summary instead of lastReservation
-  const reservation = bookingData;
+  const reservation = lastReservation;
   const depositAmount = 50;
 
   async function onSubmit(values: z.infer<typeof paymentSchema>) {

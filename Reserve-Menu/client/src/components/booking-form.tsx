@@ -36,7 +36,7 @@ export function BookingForm() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user) {
       navigate("/login");
       BookingForm: console.log("Form Errors:", form.formState.errors);
@@ -44,19 +44,15 @@ export function BookingForm() {
     }
 
     const dateStr = format(values.date, "yyyy-MM-dd");
-
-    // Fix: Parse the string 'guests' into a number
-    addReservation({
+    const reservationData = {
       name: values.name,
       email: values.email,
       date: dateStr,
       time: values.time,
       guests: parseInt(values.guests),
-    });
-
+    };
+    await addReservation(reservationData);
     setIsSubmitted(true);
-
-    // Smooth transition to payment
     setTimeout(() => {
       navigate("/payment");
     }, 2000);
