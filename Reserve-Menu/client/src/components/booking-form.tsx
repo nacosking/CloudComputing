@@ -1,33 +1,34 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { CalendarIcon, CheckCircle2, User, Mail, Clock, Users } from "lucide-react";
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { useAuth } from "@/contexts/auth-context";
-import { useLocation } from "wouter";
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { useAuth } from "@/contexts/auth-context"
+import { useLocation } from "wouter"
+import { Button } from "@/components/ui/button"
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
+import { CalendarIcon, User, Mail, Clock, Users, CheckCircle2 } from "lucide-react"
+import { format } from "date-fns"
+import { motion } from "framer-motion"
+import { useState } from "react"
+import { cn } from "@/lib/utils"
 
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
-  email: z.string().email("Invalid email address"),
-  date: z.date({ required_error: "A date is required" }),
+  email: z.string().email("Invalid email"),
+  date: z.date({ required_error: "Date is required" }),
   time: z.string({ required_error: "Time is required" }),
-  guests: z.string({ required_error: "Party size is required" }),
-});
+  guests: z.string({ required_error: "Guests required" }),
+})
 
 export function BookingForm() {
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [, navigate] = useLocation();
-  const { user, addReservation } = useAuth();
+  const [, navigate] = useLocation()
+  const { user, addReservation } = useAuth()
+
+  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -35,68 +36,40 @@ export function BookingForm() {
       name: user?.name || "",
       email: user?.email || "",
     },
-  });
+  })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    setErrorMsg(null);
-
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-
-    const dateStr = format(values.date, "yyyy-MM-dd");
-    const guestCount = values.guests === "more" ? 9 : parseInt(values.guests);
-
-    const reservationData = {
-      name: values.name,
-      email: values.email,
-      date: dateStr,
-      time: values.time,
-      guests: guestCount,
-    };
+    if (!user) return navigate("/login")
 
     try {
-      // Logic change: Perform the action, then use setIsSubmitted
-      await addReservation(reservationData);
+      await addReservation({
+        name: values.name,
+        email: values.email,
+        date: format(values.date, "yyyy-MM-dd"),
+        time: values.time,
+        guests: values.guests === "more" ? 9 : parseInt(values.guests),
+      })
 
-      // IMPORTANT: If you have form.reset() here, delete it for now
-      // to test if it's the cause of the "form is not defined" error.
+      setIsSubmitted(true)
 
-      setIsSubmitted(true);
-
-      setTimeout(() => {
-        navigate("/payment");
-      }, 2000);
-    } catch (error: any) {
-      console.error("Reservation failed:", error);
-      setErrorMsg(error?.message || "Reservation failed. Please try again.");
+      setTimeout(() => navigate("/payment"), 2000)
+    } catch (e: any) {
+      setErrorMsg(e?.message || "Reservation failed")
     }
   }
 
   if (isSubmitted) {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-gradient-to-br from-primary/10 to-accent/10 p-8 md:p-12 rounded-2xl shadow-2xl text-center border border-primary/20 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-center p-10"
       >
-        <motion.div
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 1, repeat: Infinity }}
-          className="flex justify-center mb-6"
-        >
-          <CheckCircle2 className="w-16 h-16 text-primary" />
-        </motion.div>
-        <h3 className="font-serif text-3xl font-bold mb-4 text-foreground">Reservation Confirmed</h3>
-        <p className="text-foreground/70 mb-2">
-          Thank you for booking with LumiÃ¨re
-        </p>
-        <p className="text-sm text-foreground/60">
-          Proceeding to secure your deposit...
-        </p>
+        <CheckCircle2 className="w-12 h-12 text-primary mx-auto mb-4" />
+        <h3 className="text-2xl font-bold">Reservation Confirmed</h3>
+        <p>Redirecting to payment...</p>
       </motion.div>
-    );
+    )
   }
 
   return (
