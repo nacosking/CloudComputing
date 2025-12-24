@@ -20,27 +20,26 @@ const paymentSchema = z.object({
 
 export default function PaymentPage() {
   const [, navigate] = useLocation();
-  const { lastReservation, markReservationPaid } = useAuth();
+  const { addReservation, markReservationPaid } = useAuth(); // We need addReservation here now
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const form = useForm<z.infer<typeof paymentSchema>>({
-    resolver: zodResolver(paymentSchema),
-  });
+  // --- CHANGE START: Get data from the Booking Form ---
+  const bookingData = window.history.state?.bookingData;
 
-  if (!lastReservation) {
-    navigate("/");
+  // If there's no data, they shouldn't be here
+  if (!bookingData) {
+    setTimeout(() => navigate("/"), 0);
     return null;
   }
-
-  const reservation = lastReservation;
+  const reservation = bookingData;
   const depositAmount = 50; // Fixed deposit amount in USD
 
   async function onSubmit(values: z.infer<typeof paymentSchema>) {
     setIsProcessing(true);
     // Simulate payment processing
     await new Promise((resolve) => setTimeout(resolve, 2000));
-    
+
     // Generate QR code data with reservation details
     const qrData = JSON.stringify({
       reservationId: reservation.id,
@@ -52,7 +51,7 @@ export default function PaymentPage() {
       paid: true,
       paidAt: new Date().toISOString(),
     });
-    
+
     markReservationPaid(reservation.id, qrData);
     setIsProcessing(false);
     setIsSuccess(true);

@@ -36,31 +36,39 @@ export function BookingForm() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!user) {
-      navigate("/login");
-      return;
-    }
+  async function onSubmit(values: z.infer<typeof paymentSchema>) {
+    setIsProcessing(true);
 
-    const dateStr = format(values.date, "yyyy-MM-dd");
+    // Simulate payment processing
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // 1. Show the success animation
-    setIsSubmitted(true);
+    // 1. FINALLY Save the reservation to RDS and generate S3 QR Code
+    const newReservation = await addReservation({
+      name: bookingData.name,
+      email: bookingData.email,
+      date: bookingData.date,
+      time: bookingData.time,
+      guests: bookingData.guests,
+    });
 
-    // 2. Navigate to payment after 2 seconds
+    // 2. Generate QR data for the UI
+    const qrData = JSON.stringify({
+      reservationId: newReservation.id,
+      name: newReservation.name,
+      paid: true,
+      paidAt: new Date().toISOString(),
+    });
+
+    // 3. Mark it as paid
+    markReservationPaid(newReservation.id, qrData);
+
+    setIsProcessing(false);
+    setIsSuccess(true);
+
     setTimeout(() => {
-      navigate("/payment", {
-        state: {
-          bookingData: {
-            ...values,
-            date: dateStr,
-            guests: parseInt(values.guests)
-          }
-        }
-      });
-    }, 2000);
+      navigate("/reservations");
+    }, 2500);
   }
-
   // --- RESTORED SUCCESS MESSAGE BLOCK ---
   if (isSubmitted) {
     return (
