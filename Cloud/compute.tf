@@ -2,7 +2,6 @@
 # APPLICATION LOAD BALANCER (Mandatory Requirement)
 # ---------------------------------------------------------
 
-# Create Application Load Balancer
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
   internal           = false
@@ -17,23 +16,21 @@ resource "aws_lb" "main" {
   }
 }
 
-# Create Target Group (Routes traffic to EC2 instances)
 resource "aws_lb_target_group" "main" {
   name     = "${var.project_name}-tg"
   port     = 5000
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
-  # Health check configuration
   health_check {
     enabled             = true
     healthy_threshold   = 2
     unhealthy_threshold = 2
     timeout             = 5
     interval            = 30
-    path                = "/"     # This checks your Home page
+    path                = "/"
     matcher             = "200"
-    port                = "traffic-port" # Ensures it checks port 5000
+    port                = "traffic-port"
   }
 
   tags = {
@@ -41,7 +38,6 @@ resource "aws_lb_target_group" "main" {
   }
 }
 
-# Create Listener (Forwards HTTP traffic to Target Group)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -54,7 +50,7 @@ resource "aws_lb_listener" "http" {
 }
 
 # ---------------------------------------------------------
-# LAUNCH TEMPLATE (Mandatory Requirement)
+# LAUNCH TEMPLATE
 # ---------------------------------------------------------
 
 resource "aws_launch_template" "main" {
@@ -62,59 +58,49 @@ resource "aws_launch_template" "main" {
   image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
 
-  # Attach IAM instance profile for S3 and CloudWatch access
-  # Uses the existing LabInstanceProfile provided by AWS Academy
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
 
-  # Network configuration
   network_interfaces {
     associate_public_ip_address = false
     security_groups             = [aws_security_group.web.id]
   }
 
-  # User data script (Bootstrap script that runs on instance startup)
-  # User data script (Bootstrap script)
   user_data = base64encode(<<-EOF
               #!/bin/bash
               
-              # 1. Logging setup (so you can debug if it fails)
               exec > >(tee /var/log/user-data.log) 2>&1
               echo "Starting deployment..."
 
-              # 2. Update System & Install Utilities
+              # 1. Update & Install
               apt-get update -y
               apt-get install -y git curl
 
-              # 3. Install Node.js (Version 20)
+              # 2. Install Node.js 20
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
 
-              # 4. Install PM2 (Process Manager to keep your app running)
+              # 3. Install PM2
               npm install -g pm2
 
-              # 5. Clone your repository
-              # NOTE: Ensure this repo is PUBLIC. If private, you need a Personal Access Token.
+              # 4. Clone Repo
               cd /home/ubuntu
               git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
 
-              # 6. Install & Build
+              # 5. Build App
               cd app/Reserve-Menu
               npm install
               npm run build
 
-              # 7. Configure Environment Variables
-              # This connects your App to the RDS Database created by Terraform
+              # 6. Set Environment Variables
+              # Uses the address from the RDS resource in database.tf
               export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
               export PORT=5000
               export NODE_ENV=production
 
-              # 8. Start the App using PM2
-              # We use 'dist' implicitly because NODE_ENV=production triggers your serveStatic code
+              # 7. Start with PM2
               pm2 start npm --name "reserve-menu" -- run start
-              
-              # 9. Save the process list so it respawns on reboot
               pm2 save
               pm2 startup
 
@@ -127,13 +113,14 @@ resource "aws_launch_template" "main" {
     Name = "${var.project_name}-launch-template"
   }
 }
+
 # ---------------------------------------------------------
-# AUTO SCALING GROUP (Mandatory Requirement)
+# AUTO SCALING GROUP
 # ---------------------------------------------------------
 
 resource "aws_autoscaling_group" "main" {
   name                = "${var.project_name}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
+  vpc_zone_identifier = aws_subnet.private[*].id  # ✅ Private Subnets
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
   health_check_grace_period = 300
@@ -147,7 +134,6 @@ resource "aws_autoscaling_group" "main" {
     version = "$Latest"
   }
 
-  # Instance refresh configuration (for zero-downtime updates)
   instance_refresh {
     strategy = "Rolling"
     preferences {
@@ -169,10 +155,9 @@ resource "aws_autoscaling_group" "main" {
 }
 
 # ---------------------------------------------------------
-# AUTO SCALING POLICIES (Mandatory Requirement)
+# AUTO SCALING POLICIES
 # ---------------------------------------------------------
 
-# Scale Up Policy (Triggered by high CPU alarm)
 resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.project_name}-scale-up"
   scaling_adjustment     = 1
@@ -181,7 +166,6 @@ resource "aws_autoscaling_policy" "scale_up" {
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
-# Scale Down Policy (Triggered by low CPU alarm)
 resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.project_name}-scale-down"
   scaling_adjustment     = -1
