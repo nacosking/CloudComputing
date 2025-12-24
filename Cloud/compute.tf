@@ -70,55 +70,55 @@ resource "aws_launch_template" "main" {
 
   # Network configuration
   network_interfaces {
-    associate_public_ip_address = true
+    associate_public_ip_address = false
     security_groups             = [aws_security_group.web.id]
   }
 
   # User data script (Bootstrap script that runs on instance startup)
+  # User data script (Bootstrap script)
   user_data = base64encode(<<-EOF
               #!/bin/bash
-
-              # Log to a file for debugging
+              
+              # 1. Logging setup (so you can debug if it fails)
               exec > >(tee /var/log/user-data.log) 2>&1
-              echo "Starting user-data bootstrap on Ubuntu..."
+              echo "Starting deployment..."
 
-              # 1. Update System (Ubuntu uses apt)
+              # 2. Update System & Install Utilities
               apt-get update -y
+              apt-get install -y git curl
 
-              # 2. Install Git, Curl, and Nginx
-              apt-get install -y git curl nginx
-
-              # 3. Install Node.js (Version 20 for Ubuntu)
+              # 3. Install Node.js (Version 20)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
 
-              # 4. Clone your specific 'new_cloud' branch
+              # 4. Install PM2 (Process Manager to keep your app running)
+              npm install -g pm2
+
+              # 5. Clone your repository
+              # NOTE: Ensure this repo is PUBLIC. If private, you need a Personal Access Token.
               cd /home/ubuntu
               git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
 
-              # 5. Build the frontend (Reserve-Menu/client)
+              # 6. Install & Build
               cd app/Reserve-Menu
               npm install
               npm run build
 
-              # 6. Copy build output to Nginx web root
-              cp -r dist/* /var/www/html/
-
-              # 7. Restart Nginx to serve the frontend
-              systemctl restart nginx
-
-              # 8. (Optional) Set up backend if needed
-             cd /home/ubuntu/app/Reserve-Menu
-              npm install
-              
-              # Construct the Database URL using Terraform variables
-              # Format: postgres://USERNAME:PASSWORD@HOST:PORT/DBNAME
+              # 7. Configure Environment Variables
+              # This connects your App to the RDS Database created by Terraform
               export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
+              export PORT=5000
+              export NODE_ENV=production
+
+              # 8. Start the App using PM2
+              # We use 'dist' implicitly because NODE_ENV=production triggers your serveStatic code
+              pm2 start npm --name "reserve-menu" -- run start
               
-              # Start the app in the background
-              PORT=5000 npm run start &
-              
-              echo "Bootstrap complete."
+              # 9. Save the process list so it respawns on reboot
+              pm2 save
+              pm2 startup
+
+              echo "Deployment complete."
               EOF
   )
   update_default_version = true
@@ -133,7 +133,7 @@ resource "aws_launch_template" "main" {
 
 resource "aws_autoscaling_group" "main" {
   name                = "${var.project_name}-asg"
-  vpc_zone_identifier = aws_subnet.public[*].id
+  vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
   health_check_grace_period = 300

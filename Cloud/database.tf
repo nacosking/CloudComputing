@@ -59,3 +59,22 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
     dbname   = aws_db_instance.main.db_name
   })
 }
+
+# Create a Subnet Group for RDS
+# This tells AWS: "Put the database in these specific private subnets"
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.project_name}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id  # <--- Connects DB to Private Subnets
+
+  tags = {
+    Name = "${var.project_name}-db-subnet-group"
+  }
+}
+
+# Update your existing RDS resource to use this group
+# resource "aws_db_instance" "main" {
+#   ...
+#   db_subnet_group_name = aws_db_subnet_group.main.name
+#   vpc_security_group_ids = [aws_security_group.database.id]
+#   ...
+# }
