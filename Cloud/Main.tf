@@ -47,6 +47,8 @@ data "aws_iam_role" "lab_role" {
   name = "LabRole"
 }
 
+data "aws_caller_identity" "current" {}
+
 # 2. Availability Zones
 # This finds the available zones (e.g., us-east-1a, us-east-1b)
 # to spread resources for Multi-AZ resilience.
