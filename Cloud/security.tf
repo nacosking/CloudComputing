@@ -74,9 +74,9 @@ resource "aws_security_group" "database" {
 
   # Inbound: Allow MySQL (Port 3306) ONLY from the Web SG
   ingress {
-    description     = "MySQL from web servers"
-    from_port       = 3306
-    to_port         = 3306
+    description     = "PostgreSQL from web servers"
+    from_port       = 5432
+    to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }

@@ -1,11 +1,12 @@
 # ---------------------------------------------------------
 # RDS DATABASE (Mandatory Requirement)
 # ---------------------------------------------------------
+
+# Create a Subnet Group for RDS
+# This tells AWS: "Put the database in these specific private subnets"
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
-
-  # CHANGE THIS LINE:
-  subnet_ids = aws_subnet.private[*].id
+  subnet_ids = aws_subnet.private[*].id  # ✅ Connects DB to Private Subnets
 
   tags = {
     Name = "${var.project_name}-db-subnet-group"
@@ -14,8 +15,8 @@ resource "aws_db_subnet_group" "main" {
 
 resource "aws_db_instance" "main" {
   identifier               = "${var.project_name}-db"
-  engine                   = "mysql"
-  engine_version           = "8.0"
+  engine                   = "postgres"
+  engine_version           = var.db_engine_version
   instance_class           = "db.t3.micro"
 
   # --- Role 3: Security ---
@@ -31,7 +32,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids   = [aws_security_group.database.id] # ✅ Firewall
 
   # --- Role 3: Cost & Backups ---
-  multi_az                 = false # ✅ Save money
+  multi_az                 = false # ✅ Save money (set true for High Availability)
   backup_retention_period  = 7     # ✅ Backup Policy
   skip_final_snapshot      = true
 

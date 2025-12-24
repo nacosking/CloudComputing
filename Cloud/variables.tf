@@ -71,7 +71,7 @@ variable "allowed_ssh_cidr" {
 variable "db_username" {
   description = "Database master username"
   type        = string
-  default     = "admin"
+  default     = "dbadmin"
   sensitive   = true # Hides value in logs
 }
 
@@ -85,4 +85,10 @@ variable "db_name" {
   description = "Database name"
   type        = string
   default     = "appdb"
+}
+
+variable "db_engine_version" {
+  description = "The version of the PostgreSQL engine to use"
+  type        = string
+  default     = "16.6"  # Set a safe default like 16.1 or 15.5
 }

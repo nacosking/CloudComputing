@@ -2,9 +2,7 @@
 # COMPUTE: ALB, LAUNCH TEMPLATE, ASG
 # ---------------------------------------------------------
 
-# Note: We removed 'data "aws_ami" "ubuntu"' because it is now in Main.tf
-# Note: We removed 'data "aws_iam_instance_profile"' because it is now in security.tf
-
+# Create Application Load Balancer
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
   internal           = false
@@ -12,8 +10,15 @@ resource "aws_lb" "main" {
   # References security group defined in security.tf
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "${var.project_name}-alb"
+  }
 }
 
+# Create Target Group (Routes traffic to EC2 instances)
 resource "aws_lb_target_group" "main" {
   name     = "${var.project_name}-tg"
   port     = 5000
@@ -30,6 +35,10 @@ resource "aws_lb_target_group" "main" {
     timeout             = 5
     interval            = 30
   }
+
+  tags = {
+    Name = "${var.project_name}-target-group"
+  }
 }
 
 resource "aws_lb_listener" "http" {
@@ -42,44 +51,60 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+# ---------------------------------------------------------
+# LAUNCH TEMPLATE (Mandatory Requirement)
+# ---------------------------------------------------------
+
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
-  # This correctly refers to the data source in Main.tf
+
+  # FIXED: Changed from amazon_linux to ubuntu (matches Main.tf)
   image_id      = data.aws_ami.ubuntu.id
+
   instance_type = var.instance_type
 
-  # References the profile data source in security.tf
+  # Attach IAM instance profile for S3 and CloudWatch access
+  # Uses the data source defined in security.tf
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
 
   network_interfaces {
     associate_public_ip_address = true
-    # References security group defined in security.tf
     security_groups             = [aws_security_group.web.id]
   }
 
-  user_data = base64encode(<<-EOF
+ user_data = base64encode(<<-EOF
               #!/bin/bash
               set -e
               exec > >(tee /var/log/user-data.log) 2>&1
 
+              # 1. Update & Install Tools
               apt-get update -y
-              apt-get install -y git curl build-essential
+              apt-get install -y git curl build-essential postgresql-client
+
+              # 2. Install Node.js 20
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
               npm install -g pm2
 
+              # 3. Clone the CORRECT branch
               cd /home/ubuntu
-              git clone -b testing https://github.com/nacosking/CloudComputing.git app
+              git clone -b cloud_features https://github.com/nacosking/CloudComputing.git app
               chown -R ubuntu:ubuntu app
 
+              # 4. Install Dependencies
               cd app/ReserveMenu/ReserveMenu
               npm install
               npm run build
 
+              # 5. Start App with Database Connection
               export PORT=5000
               export NODE_ENV=production
+
+              # IMPORTANT: This injects the RDS details so the app can connect
+              # Ensure 'aws_db_instance.main' matches your database.tf resource name
+              export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
 
               pm2 start npm --name "reserve-menu" -- start
               pm2 save
@@ -88,9 +113,16 @@ resource "aws_launch_template" "main" {
   )
 }
 
+# ---------------------------------------------------------
+# AUTO SCALING GROUP (Mandatory Requirement)
+# ---------------------------------------------------------
+
 resource "aws_autoscaling_group" "main" {
   name                = "${var.project_name}-asg"
+
+  # FIXED: Switched to PUBLIC subnets to ensure Internet Access for git clone
   vpc_zone_identifier = aws_subnet.public[*].id
+
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
   min_size            = var.min_size
@@ -101,10 +133,30 @@ resource "aws_autoscaling_group" "main" {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
+
+  # Instance refresh configuration (for zero-downtime updates)
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${var.project_name}-asg-instance"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "ManagedBy"
+    value               = "AutoScaling"
+    propagate_at_launch = true
+  }
 }
 
 # ---------------------------------------------------------
-# AUTOSCALING POLICIES (Required by Monitoring)
+# AUTO SCALING POLICIES (Mandatory Requirement)
 # ---------------------------------------------------------
 
 resource "aws_autoscaling_policy" "scale_up" {
