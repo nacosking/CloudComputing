@@ -35,6 +35,8 @@ export function BookingForm() {
     defaultValues: {
       name: user?.name || "",
       email: user?.email || "",
+      time: "18:00", // Add this
+      guests: "2",    // Add this
     },
   })
 
