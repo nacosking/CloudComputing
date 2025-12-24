@@ -20,19 +20,20 @@ const paymentSchema = z.object({
 
 export default function PaymentPage() {
   const [, navigate] = useLocation();
-  const { addReservation, markReservationPaid } = useAuth(); // We need addReservation here now
+  const { lastReservation, markReservationPaid } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // --- CHANGE START: Get data from the Booking Form ---
-  const bookingData = window.history.state?.bookingData;
+  const form = useForm<z.infer<typeof paymentSchema>>({
+    resolver: zodResolver(paymentSchema),
+  });
 
-  // If there's no data, they shouldn't be here
-  if (!bookingData) {
-    setTimeout(() => navigate("/"), 0);
+  if (!lastReservation) {
+    navigate("/");
     return null;
   }
-  const reservation = bookingData;
+
+  const reservation = lastReservation;
   const depositAmount = 50; // Fixed deposit amount in USD
 
   async function onSubmit(values: z.infer<typeof paymentSchema>) {

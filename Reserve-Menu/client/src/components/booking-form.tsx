@@ -26,7 +26,7 @@ const formSchema = z.object({
 export function BookingForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, addReservation } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -39,28 +39,29 @@ export function BookingForm() {
   function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user) {
       navigate("/login");
+      BookingForm: console.log("Form Errors:", form.formState.errors);
       return;
     }
 
     const dateStr = format(values.date, "yyyy-MM-dd");
 
-    // 1. Show the success animation (isSubmitted block)
+    // Fix: Parse the string 'guests' into a number
+    addReservation({
+      name: values.name,
+      email: values.email,
+      date: dateStr,
+      time: values.time,
+      guests: parseInt(values.guests),
+    });
+
     setIsSubmitted(true);
 
-    // 2. Navigate to payment after 2 seconds
+    // Smooth transition to payment
     setTimeout(() => {
-      navigate("/payment", {
-        state: {
-          bookingData: {
-            ...values,
-            date: dateStr,
-            guests: parseInt(values.guests)
-          }
-        }
-      });
+      navigate("/payment");
     }, 2000);
   }
-  // --- RESTORED SUCCESS MESSAGE BLOCK ---
+
   if (isSubmitted) {
     return (
       <motion.div
@@ -75,12 +76,12 @@ export function BookingForm() {
         >
           <CheckCircle2 className="w-16 h-16 text-primary" />
         </motion.div>
-        <h3 className="font-serif text-3xl font-bold mb-4 text-foreground">Details Confirmed</h3>
+        <h3 className="font-serif text-3xl font-bold mb-4 text-foreground">Reservation Confirmed</h3>
         <p className="text-foreground/70 mb-2">
-          Thank you for choosing Lumière
+          Thank you for booking with LumiÃ¨re
         </p>
-        <p className="text-sm text-foreground/60 italic">
-          Redirecting to secure payment...
+        <p className="text-sm text-foreground/60">
+          Proceeding to secure your deposit...
         </p>
       </motion.div>
     );
@@ -88,8 +89,11 @@ export function BookingForm() {
 
   return (
     <div className="relative">
+      {/* Background Glow */}
       <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl blur-2xl opacity-60" />
+
       <div className="relative bg-gradient-to-br from-card to-card/90 p-8 md:p-10 rounded-2xl shadow-2xl border border-primary/20">
+        {/* Header */}
         <div className="mb-8">
           <h3 className="font-serif text-3xl font-bold mb-2 text-foreground">Reserve Your Table</h3>
           <p className="text-foreground/70 text-sm">Complete your booking in just a few steps</p>
@@ -97,6 +101,7 @@ export function BookingForm() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Name & Email Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <FormField
                 control={form.control}
@@ -108,7 +113,11 @@ export function BookingForm() {
                       Full Name
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder="John Doe" {...field} className="bg-background/80 border-primary/20 rounded-lg h-11" />
+                      <Input
+                        placeholder="John Doe"
+                        {...field}
+                        className="bg-background/80 border-primary/20 focus:border-primary/50 focus:ring-primary/20 rounded-lg h-11 placeholder:text-foreground/40"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -124,7 +133,11 @@ export function BookingForm() {
                       Email
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder="john@example.com" {...field} className="bg-background/80 border-primary/20 rounded-lg h-11" />
+                      <Input
+                        placeholder="john@example.com"
+                        {...field}
+                        className="bg-background/80 border-primary/20 focus:border-primary/50 focus:ring-primary/20 rounded-lg h-11 placeholder:text-foreground/40"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -132,6 +145,7 @@ export function BookingForm() {
               />
             </div>
 
+            {/* Date, Time & Guests Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <FormField
                 control={form.control}
@@ -139,20 +153,68 @@ export function BookingForm() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col relative group">
                     <FormLabel className="text-foreground font-semibold flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-primary" />
+                      <motion.div
+                        animate={{ rotate: [0, 10, -10, 0] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <CalendarIcon className="w-4 h-4 text-primary" />
+                      </motion.div>
                       Date
                     </FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
-                          <Button variant={"outline"} className={cn("pl-4 pr-3 text-left font-normal rounded-lg h-12 bg-background/80 border-primary/20", !field.value && "text-foreground/40")}>
-                            {field.value ? format(field.value, "MMM dd, yyyy") : <span>Pick a date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
+                          <motion.div
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "pl-4 pr-3 text-left font-normal rounded-lg h-12 transition-all",
+                                "bg-gradient-to-r from-background/80 to-primary/5",
+                                "border-2 border-primary/30 hover:border-primary/60",
+                                "hover:shadow-lg hover:shadow-primary/20",
+                                !field.value ? "text-foreground/40" : "text-foreground font-medium"
+                              )}
+                            >
+                              <div className="flex flex-col flex-1">
+                                {field.value ? (
+                                  <>
+                                    <span className="text-xs text-foreground/60 uppercase tracking-wider">Selected</span>
+                                    <span className="text-sm font-serif">{format(field.value, "MMM dd, yyyy")}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-sm">Pick your date</span>
+                                )}
+                              </div>
+                              <motion.div
+                                animate={{ x: field.value ? 0 : [0, 4, 0] }}
+                                transition={{ duration: 2, repeat: Infinity }}
+                              >
+                                <CalendarIcon className="w-5 h-5 text-primary opacity-70" />
+                              </motion.div>
+                            </Button>
+                          </motion.div>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date()} initialFocus />
+                      <PopoverContent className="w-auto p-4" align="start">
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) =>
+                              date < new Date() || date < new Date("1900-01-01")
+                            }
+                            initialFocus
+                            className="rounded-xl border border-primary/20"
+                          />
+                        </motion.div>
                       </PopoverContent>
                     </Popover>
                     <FormMessage />
@@ -171,14 +233,20 @@ export function BookingForm() {
                     </FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger className="bg-background/80 border-primary/20 rounded-lg h-11">
+                        <SelectTrigger className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11">
                           <SelectValue placeholder="Select time" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="17:00">5:00 PM</SelectItem>
+                        <SelectItem value="17:30">5:30 PM</SelectItem>
                         <SelectItem value="18:00">6:00 PM</SelectItem>
+                        <SelectItem value="18:30">6:30 PM</SelectItem>
                         <SelectItem value="19:00">7:00 PM</SelectItem>
+                        <SelectItem value="19:30">7:30 PM</SelectItem>
                         <SelectItem value="20:00">8:00 PM</SelectItem>
+                        <SelectItem value="20:30">8:30 PM</SelectItem>
+                        <SelectItem value="21:00">9:00 PM</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -197,13 +265,17 @@ export function BookingForm() {
                     </FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger className="bg-background/80 border-primary/20 rounded-lg h-11">
-                          <SelectValue placeholder="Size" />
+                        <SelectTrigger className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11">
+                          <SelectValue placeholder="Party size" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="2">2 Guests</SelectItem>
-                        <SelectItem value="4">4 Guests</SelectItem>
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                          <SelectItem key={num} value={num.toString()}>
+                            {num} {num === 1 ? "Guest" : "Guests"}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="more">8+ (Call us)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -212,9 +284,35 @@ export function BookingForm() {
               />
             </div>
 
-            <Button type="submit" className="w-full h-12 text-lg font-serif bg-primary text-primary-foreground rounded-lg">
-              {user ? "Confirm Reservation" : "Sign In to Book"}
-            </Button>
+            {/* Submit Button */}
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Button
+                type="submit"
+                className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground rounded-lg shadow-lg hover:shadow-xl transition-all"
+              >
+                {user ? "Confirm Reservation" : "Sign In to Book"}
+              </Button>
+            </motion.div>
+
+            {!user && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-foreground/60 text-sm text-center italic"
+              >
+                You'll need to sign in to complete your reservation
+              </motion.p>
+            )}
+
+            {/* Info Message */}
+            <div className="pt-4 border-t border-primary/10">
+              <p className="text-xs text-foreground/60 text-center">
+                ðŸ’¡ <span className="italic">For parties larger than 8, please call us directly at (555) 123-4567</span>
+              </p>
+            </div>
           </form>
         </Form>
       </div>
