@@ -82,3 +82,30 @@ export async function registerRoutes(
   await seedDatabase();
   return httpServer;
 }
+async function seedDatabase() {
+  const categories = await storage.getCategories();
+  if (categories.length === 0) {
+    const starters = await storage.createCategory({ name: "Starters", slug: "starters" });
+    const mains = await storage.createCategory({ name: "Mains", slug: "mains" });
+    const desserts = await storage.createCategory({ name: "Desserts", slug: "desserts" });
+    const drinks = await storage.createCategory({ name: "Drinks", slug: "drinks" });
+
+    await storage.createMenuItem({
+      categoryId: starters.id,
+      name: "Bruschetta",
+      description: "Grilled bread rubbed with garlic and topped with olive oil and salt.",
+      price: 800,
+      available: true,
+      imageUrl: "https://images.unsplash.com/photo-1572695157363-bc3a58a6ae28?w=800&auto=format&fit=crop"
+    });
+
+    await storage.createMenuItem({
+      categoryId: mains.id,
+      name: "Grilled Salmon",
+      description: "Fresh atlantic salmon with roasted vegetables.",
+      price: 2400,
+      available: true,
+      imageUrl: "https://images.unsplash.com/photo-1485921325833-c519f76c4974?w=800&auto=format&fit=crop"
+    });
+  }
+}
