@@ -93,9 +93,9 @@ export function BookingForm() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel htmlFor="name">Full Name</FormLabel>
+                    <FormLabel>Full Name</FormLabel>
                     <FormControl>
-                      <Input {...field} id="name" name="name" autoComplete="name" />
+                      <Input {...field} placeholder="John Doe" autoComplete="name" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -108,9 +108,9 @@ export function BookingForm() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel htmlFor="email">Email</FormLabel>
+                    <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input {...field} id="email" name="email" type="email" autoComplete="email" />
+                      <Input {...field} type="email" placeholder="john@example.com" autoComplete="email" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -125,7 +125,7 @@ export function BookingForm() {
                 name="date"
                 render={({ field }) => (
                   <FormItem className="flex flex-col relative group">
-                    <FormLabel htmlFor="date" className="text-foreground font-semibold flex items-center gap-2">
+                    <FormLabel className="text-foreground font-semibold flex items-center gap-2">
                       <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity }}>
                         <CalendarIcon className="w-4 h-4 text-primary" />
                       </motion.div>
@@ -136,13 +136,10 @@ export function BookingForm() {
                         <FormControl>
                           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                             <Button
-                              id="date"
                               variant={"outline"}
                               className={cn(
-                                "pl-4 pr-3 text-left font-normal rounded-lg h-12 transition-all",
-                                "bg-gradient-to-r from-background/80 to-primary/5",
-                                "border-2 border-primary/30 hover:border-primary/60",
-                                "hover:shadow-lg hover:shadow-primary/20",
+                                "w-full pl-4 pr-3 text-left font-normal rounded-lg h-12 transition-all",
+                                "bg-gradient-to-r from-background/80 to-primary/5 border-2 border-primary/30",
                                 !field.value ? "text-foreground/40" : "text-foreground font-medium"
                               )}
                             >
@@ -156,9 +153,7 @@ export function BookingForm() {
                                   <span className="text-sm">Pick your date</span>
                                 )}
                               </div>
-                              <motion.div animate={{ x: field.value ? 0 : [0, 4, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                                <CalendarIcon className="w-5 h-5 text-primary opacity-70" />
-                              </motion.div>
+                              <CalendarIcon className="w-5 h-5 text-primary opacity-70" />
                             </Button>
                           </motion.div>
                         </FormControl>
@@ -170,7 +165,6 @@ export function BookingForm() {
                           onSelect={field.onChange}
                           disabled={(date) => date < new Date() || date < new Date("1900-01-01")}
                           initialFocus
-                          className="rounded-xl border border-primary/20"
                         />
                       </PopoverContent>
                     </Popover>
@@ -185,28 +179,22 @@ export function BookingForm() {
                 name="time"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel htmlFor="time" className="text-foreground font-semibold flex items-center gap-2">
+                    <FormLabel className="text-foreground font-semibold flex items-center gap-2">
                       <Clock className="w-4 h-4 text-primary" />
                       Time
                     </FormLabel>
-                    <FormControl>
-                      <Select {...field} id="time" onValueChange={field.onChange} defaultValue={field.value}>
-                        <SelectTrigger className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11">
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="bg-background/80 border-primary/20 rounded-lg h-11">
                           <SelectValue placeholder="Select time" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="17:00">5:00 PM</SelectItem>
-                          <SelectItem value="17:30">5:30 PM</SelectItem>
-                          <SelectItem value="18:00">6:00 PM</SelectItem>
-                          <SelectItem value="18:30">6:30 PM</SelectItem>
-                          <SelectItem value="19:00">7:00 PM</SelectItem>
-                          <SelectItem value="19:30">7:30 PM</SelectItem>
-                          <SelectItem value="20:00">8:00 PM</SelectItem>
-                          <SelectItem value="20:30">8:30 PM</SelectItem>
-                          <SelectItem value="21:00">9:00 PM</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormControl>
+                      </FormControl>
+                      <SelectContent>
+                        {["17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00"].map((t) => (
+                          <SelectItem key={t} value={t}>{t.replace(':', ' : ')} PM</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -218,25 +206,25 @@ export function BookingForm() {
                 name="guests"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel htmlFor="guests" className="text-foreground font-semibold flex items-center gap-2">
+                    <FormLabel className="text-foreground font-semibold flex items-center gap-2">
                       <Users className="w-4 h-4 text-primary" />
                       Guests
                     </FormLabel>
-                    <FormControl>
-                      <Select {...field} id="guests" onValueChange={field.onChange} defaultValue={field.value}>
-                        <SelectTrigger className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11">
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="bg-background/80 border-primary/20 rounded-lg h-11">
                           <SelectValue placeholder="Party size" />
                         </SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
-                            <SelectItem key={num} value={num.toString()}>
-                              {num} {num === 1 ? "Guest" : "Guests"}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value="more">8+ (Call us)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormControl>
+                      </FormControl>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                          <SelectItem key={num} value={num.toString()}>
+                            {num} {num === 1 ? "Guest" : "Guests"}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="more">8+ (Call us)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -246,7 +234,7 @@ export function BookingForm() {
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Button
                 type="submit"
-                className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground rounded-lg shadow-lg hover:shadow-xl transition-all"
+                className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-lg shadow-lg transition-all"
               >
                 {user ? "Confirm Reservation" : "Sign In to Book"}
               </Button>
@@ -257,12 +245,6 @@ export function BookingForm() {
                 You'll need to sign in to complete your reservation
               </motion.p>
             )}
-
-            <div className="pt-4 border-t border-primary/10">
-              <p className="text-xs text-foreground/60 text-center">
-                ðŸ’¡ <span className="italic">For parties larger than 8, please call us directly at (555) 123-4567</span>
-              </p>
-            </div>
           </form>
         </Form>
       </div>
