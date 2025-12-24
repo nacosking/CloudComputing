@@ -51,11 +51,16 @@ export function BookingForm() {
       time: values.time,
       guests: parseInt(values.guests),
     };
-    await addReservation(reservationData);
-    setIsSubmitted(true);
-    setTimeout(() => {
-      navigate("/payment");
-    }, 2000);
+    try {
+      await addReservation(reservationData);
+      setIsSubmitted(true);
+      setTimeout(() => {
+        navigate("/payment");
+      }, 2000);
+    } catch (error) {
+      console.error("Reservation failed:", error);
+      // Optionally show an error message to the user
+    }
   }
 
   if (isSubmitted) {
