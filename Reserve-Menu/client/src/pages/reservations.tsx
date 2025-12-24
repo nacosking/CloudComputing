@@ -1,276 +1,195 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertReservationSchema } from "@shared/schema";
-import { useCreateReservation } from "@/hooks/use-reservations";
-import { useToast } from "@/hooks/use-toast";
-import { z } from "zod";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { useLocation } from "wouter";
+import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { CalendarIcon, Loader2, CheckCircle2 } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link } from "wouter";
+import { format, parseISO } from "date-fns";
+import { motion } from "framer-motion";
+import { Trash2, Calendar, Users, Clock, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { QRCodeCanvas } from "qrcode.react";
 
-// Extend schema to ensure types match form inputs properly
-const formSchema = insertReservationSchema.extend({
-  guests: z.coerce.number().min(1, "At least 1 guest required"),
-  date: z.coerce.date({ required_error: "Date is required" }),
-  phone: z.string().min(10, "Please enter a valid phone number"),
-});
+export default function ReservationsPage() {
+  const [, navigate] = useLocation();
+  const { user, reservations, logout, cancelReservation } = useAuth();
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
 
-type FormValues = z.infer<typeof formSchema>;
-
-export default function Reservations() {
-  const { toast } = useToast();
-  const mutation = useCreateReservation();
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      guests: 2,
-      time: "19:00",
-    },
-  });
-
-  function onSubmit(data: FormValues) {
-    mutation.mutate(data, {
-      onSuccess: () => {
-        toast({
-          title: "Reservation Confirmed!",
-          description: `We'll see you on ${format(data.date, "PPP")} at ${data.time}.`,
-          duration: 5000,
-        });
-        form.reset();
-      },
-      onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
-      },
-    });
+  if (!user) {
+    navigate("/login");
+    return null;
   }
 
-  const timeSlots = [
-    "17:00", "17:30", "18:00", "18:30", "19:00", "19:30",
-    "20:00", "20:30", "21:00", "21:30"
-  ];
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
+
+  const handleCancel = (reservationId: string) => {
+    setCancelingId(reservationId);
+    setTimeout(() => {
+      cancelReservation(reservationId);
+      setCancelingId(null);
+    }, 300);
+  };
 
   return (
-    <div className="min-h-screen bg-secondary/10 pb-24">
-      <div className="relative h-[40vh] bg-foreground flex items-center justify-center overflow-hidden">
-        {/* Unsplash: Elegant table setting, wine glasses */}
-        <img
-          src="https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop"
-          alt="Table Setting"
-          className="absolute inset-0 w-full h-full object-cover opacity-60"
-        />
-        <div className="relative z-10 text-center text-white px-4">
-          <h1 className="font-serif text-4xl md:text-6xl font-bold mb-4">Book a Table</h1>
-          <p className="text-white/80 text-lg max-w-lg mx-auto">
-            Reserve your spot for an unforgettable dining experience.
-          </p>
-        </div>
-      </div>
-
-      <div className="container-custom -mt-20 relative z-20">
-        <div className="bg-card rounded-2xl shadow-xl border border-border/50 overflow-hidden max-w-4xl mx-auto flex flex-col md:flex-row">
-          {/* Left Side Info */}
-          <div className="bg-foreground text-primary-foreground p-8 md:p-12 md:w-1/3 flex flex-col justify-between">
-            <div className="space-y-6">
-              <h3 className="font-serif text-2xl font-bold text-white">Information</h3>
-              <div className="space-y-4 text-white/70">
-                <p>
-                  Reservations are required for groups of 6 or more.
-                </p>
-                <p>
-                  For private events, please contact us directly by phone.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-12 space-y-2 text-white/90">
-              <p className="font-bold">Reservation Support</p>
-              <p className="text-2xl font-serif text-primary">(415) 555-0123</p>
-            </div>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="bg-foreground text-background py-6 border-b border-border">
+        <div className="container mx-auto px-4 flex justify-between items-center">
+          <div>
+            <Link href="/">
+              <a className="font-serif text-2xl font-bold mb-2 block">
+                Lumière<span className="text-primary">.</span>
+              </a>
+            </Link>
+            <p className="text-foreground/60">Welcome, <span className="font-semibold">{user.name}</span></p>
           </div>
+          <div className="flex gap-4">
+            <Button asChild variant="outline" className="border-background/30 text-background hover:bg-background hover:text-foreground">
+              <a href="/">Home</a>
+            </Button>
+            <Button
+              onClick={handleLogout}
+              variant="ghost"
+              className="text-background hover:bg-background/20"
+            >
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      </header>
 
-          {/* Right Side Form */}
-          <div className="p-8 md:p-12 md:w-2/3 bg-background">
-            {mutation.isSuccess ? (
-              <div className="h-full flex flex-col items-center justify-center text-center space-y-6 py-12">
-                <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
-                  <CheckCircle2 className="w-10 h-10" />
-                </div>
-                <h2 className="font-serif text-3xl font-bold">Confirmed!</h2>
-                <p className="text-muted-foreground max-w-xs">
-                  Your table has been reserved. Check your email for confirmation details.
-                </p>
-                <Button
-                  onClick={() => mutation.reset()}
-                  variant="outline"
-                  className="mt-4"
-                >
-                  Make Another Reservation
-                </Button>
-              </div>
-            ) : (
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Full Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="John Doe" {...field} className="h-12 bg-secondary/20" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Phone Number</FormLabel>
-                          <FormControl>
-                            <Input placeholder="(555) 000-0000" {...field} className="h-12 bg-secondary/20" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+      {/* Content */}
+      <div className="container mx-auto px-4 py-16">
+        <div className="mb-12">
+          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">Your Reservations</h1>
+          <p className="text-muted-foreground text-lg">Manage all your bookings at Lumière</p>
+        </div>
+
+        {reservations.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-16 bg-muted/30 rounded-xl border border-border"
+          >
+            <Calendar className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="font-serif text-2xl font-bold mb-2">No Reservations Yet</h2>
+            <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+              You haven't made any reservations yet. Book a table at Lumière to get started.
+            </p>
+            <Button asChild className="rounded-full px-8">
+              <a href="/#book">Book a Table</a>
+            </Button>
+          </motion.div>
+        ) : (
+          <div className="grid gap-6">
+            {reservations.map((reservation, idx) => (
+              <motion.div
+                key={reservation.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${cancelingId === reservation.id ? "opacity-50" : ""
+                  }`}
+              >
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div>
+                    <h3 className="font-serif text-2xl font-bold mb-6">Reservation Details</h3>
+
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-muted-foreground text-sm uppercase tracking-wider mb-1">Name</p>
+                        <p className="font-medium text-lg">{reservation.name}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-muted-foreground text-sm uppercase tracking-wider mb-1">Email</p>
+                        <p className="text-foreground">{reservation.email}</p>
+                      </div>
+
+                      <div className="pt-4 border-t border-border">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="flex flex-col items-center">
+                            <Calendar className="w-5 h-5 text-primary mb-2" />
+                            <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Date</p>
+                            <p className="font-semibold">
+                              {format(parseISO(reservation.date), "MMM dd")}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-col items-center">
+                            <Clock className="w-5 h-5 text-primary mb-2" />
+                            <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Time</p>
+                            <p className="font-semibold">
+                              {reservation.time}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-col items-center">
+                            <Users className="w-5 h-5 text-primary mb-2" />
+                            <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Guests</p>
+                            <p className="font-semibold">
+                              {reservation.guests}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email Address</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="john@example.com" {...field} className="h-12 bg-secondary/20" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="date"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>Date</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant={"outline"}
-                                  className={cn(
-                                    "h-12 pl-3 text-left font-normal bg-secondary/20 border-input",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, "PPP")
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                disabled={(date) =>
-                                  date < new Date() || date < new Date("1900-01-01")
-                                }
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="time"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Time</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="h-12 bg-secondary/20">
-                                <SelectValue placeholder="Select time" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {timeSlots.map(time => (
-                                <SelectItem key={time} value={time}>{time}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="guests"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Guests</FormLabel>
-                          <FormControl>
-                            <Input type="number" min={1} max={20} {...field} className="h-12 bg-secondary/20" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={mutation.isPending}
-                    className="w-full h-12 text-lg font-medium bg-primary hover:bg-primary/90 rounded-xl mt-6 shadow-lg shadow-primary/20"
-                  >
-                    {mutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Confirming...
-                      </>
+                  <div className="flex flex-col justify-between">
+                    {reservation.paid && reservation.qrCode ? (
+                      <div className="bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20 rounded-lg p-6 mb-6">
+                        <div className="flex items-center gap-2 mb-4">
+                          <CheckCircle2 className="w-5 h-5 text-primary" />
+                          <h4 className="font-serif text-lg font-bold">Deposit Paid</h4>
+                        </div>
+                        <p className="text-muted-foreground text-sm mb-4">
+                          Show this QR code when you arrive at the restaurant.
+                        </p>
+                        <div className="bg-background rounded-lg p-4 flex justify-center border border-primary/30">
+                          <QRCodeCanvas
+                            value={reservation.qrCode}
+                            size={160}
+                            level="H"
+                            includeMargin={true}
+                            bgColor="#ffffff"
+                            fgColor="#000000"
+                          />
+                        </div>
+                        <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20">
+                          <p className="text-xs text-muted-foreground mb-1">Confirmation ID</p>
+                          <p className="font-mono text-xs font-bold text-primary">{reservation.id}</p>
+                        </div>
+                      </div>
                     ) : (
-                      "Confirm Reservation"
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-6 mb-6">
+                        <h4 className="font-serif text-lg font-bold mb-3">Confirmation</h4>
+                        <p className="text-muted-foreground text-sm mb-4">
+                          Your table is reserved and waiting for you.
+                          Please arrive 5-10 minutes early.
+                        </p>
+                        <div className="p-3 bg-background rounded border border-primary/30">
+                          <p className="text-xs text-muted-foreground mb-1">Reservation ID</p>
+                          <p className="font-mono text-sm font-bold text-primary">{reservation.id}</p>
+                        </div>
+                      </div>
                     )}
-                  </Button>
-                </form>
-              </Form>
-            )}
+
+                    <Button
+                      onClick={() => handleCancel(reservation.id)}
+                      variant="ghost"
+                      className="w-full border border-red-200 text-red-600 hover:bg-red-50 group"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                      Cancel Reservation
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
