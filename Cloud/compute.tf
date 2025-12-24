@@ -1,35 +1,61 @@
 # ---------------------------------------------------------
-# LOAD BALANCER (Mandatory Requirement)
+# APPLICATION LOAD BALANCER (Mandatory Requirement)
 # ---------------------------------------------------------
-resource "aws_lb" "main" {
-  name                = "${var.project_name}-alb"
-  internal            = false # Public-facing ALB
-  load_balancer_type  = "application"
-  security_groups     = [aws_security_group.alb.id]
-  subnets             = aws_subnet.public[*].id # Placed in public subnets
 
-  enable_deletion_protection = false # Allows easy cleanup
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical (The company that makes Ubuntu)
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+# Create Application Load Balancer
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection = false
 
   tags = {
     Name = "${var.project_name}-alb"
   }
 }
 
-# Target Group (Defines where the ALB sends traffic and how it checks health)
+# Create Target Group (Routes traffic to EC2 instances)
 resource "aws_lb_target_group" "main" {
   name     = "${var.project_name}-tg"
-  port     = 3000
+  port     = 5000
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
+  # Health check configuration
   health_check {
     enabled             = true
-    path                = "/" # Checks the root path for a response
-    matcher             = "200" # Expects a 200 OK status
+    healthy_threshold   = 2
+    unhealthy_threshold = 5    # Increased to allow more retries
+    timeout             = 10   # Increased timeout
+    interval            = 30
+    path                = "/"     # This checks your Home page
+    matcher             = "200,301,302"  # Accept redirects too
+    port                = "traffic-port" # Ensures it checks port 5000
+  }
+
+  tags = {
+    Name = "${var.project_name}-target-group"
   }
 }
 
-# ALB Listener (Listens on port 80 and forwards traffic to the target group)
+# Create Listener (Forwards HTTP traffic to Target Group)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -42,120 +68,144 @@ resource "aws_lb_listener" "http" {
 }
 
 # ---------------------------------------------------------
-# LAUNCH TEMPLATE & USER DATA (Mandatory Requirement)
+# LAUNCH TEMPLATE (Mandatory Requirement)
 # ---------------------------------------------------------
 
-locals {
-  user_data = <<-EOF
-        #!/bin/bash
-        set -e  # Exit on error
-        exec > /var/log/user-data.log 2>&1  # Log all output
-
-        # 1. CREATE SWAP (Still needed for t2.micro)
-        dd if=/dev/zero of=/swapfile bs=128M count=16
-        chmod 600 /swapfile
-        mkswap /swapfile
-        swapon /swapfile
-
-        # 2. INSTALL SYSTEM DEPS (AL2023 uses dnf)
-        dnf update -y
-        dnf install -y git wget tar
-
-        # 3. INSTALL NODE.JS 20 via NodeSource (most reliable method)
-        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-        dnf install -y nodejs
-
-        # Verify installation
-        node --version
-        npm --version
-
-        # 4. INSTALL CLOUDWATCH AGENT
-        wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-        rpm -U ./amazon-cloudwatch-agent.rpm || true
-
-        # 5. CLONE APPLICATION
-        cd /opt
-        git clone --branch testing --single-branch https://github.com/nacosking/CloudComputing.git app
-
-        # 6. Install dependencies and build full app from Application folder
-        cd /opt/app/Application
-        npm install
-        npm run build
-
-        # 7. Configure environment for backend
-        export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}"
-        export SESSION_SECRET="change-me-session-secret"
-        export NODE_ENV=production
-        export PORT=3000
-
-        # 8. Start backend server (npm start runs compiled dist/index.cjs)
-        nohup npm start > /var/log/app.log 2>&1 &
-        EOF
-}
-
-# Launch Template (Blueprint for the EC2 instances)
 resource "aws_launch_template" "main" {
-  name_prefix            = "${var.project_name}-lt-"
-  image_id               = data.aws_ami.amazon_linux.id
-  instance_type          = var.instance_type
+  name_prefix   = "${var.project_name}-lt-"
+  image_id      = data.aws_ami.ubuntu.id
+  instance_type = var.instance_type
 
-  # Replace with your real EC2 key pair name if you need SSH access
-  key_name               = "vockey"
-
+  # Attach IAM instance profile for S3 and CloudWatch access
+  # Uses the existing LabInstanceProfile provided by AWS Academy
   iam_instance_profile {
-    name = data.aws_iam_instance_profile.lab_profile.name # Attaches existing LabInstanceProfile permissions
+    name = data.aws_iam_instance_profile.lab_profile.name
   }
 
-  vpc_security_group_ids = [aws_security_group.web.id] # Applies App Firewall
-
-  user_data = base64encode(local.user_data) # Runs the startup script
-
-  monitoring {
-    enabled = true
+  # Network configuration
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [aws_security_group.web.id]
   }
 
-  # Add Name tag to EC2 instances created by Auto Scaling
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "${var.project_name}-web-server"
-    }
+  # User data script (Bootstrap script that runs on instance startup)
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              set -e  # Exit on any error
+
+              # Log all output for debugging
+              exec > >(tee /var/log/user-data.log) 2>&1
+              echo "Starting bootstrap script..."
+
+              # 1. Update System
+              apt-get update -y
+              apt-get upgrade -y
+
+              # 2. Install Git and Curl
+              apt-get install -y git curl build-essential
+
+              # 3. Install Node.js (Version 20 for Ubuntu)
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              apt-get install -y nodejs
+
+              # 4. Install Process Manager (PM2)
+              npm install -g pm2
+
+              # 5. Clone your specific 'testing' branch
+              cd /home/ubuntu
+              git clone -b testing https://github.com/nacosking/CloudComputing.git app
+              chown -R ubuntu:ubuntu app
+
+              # 6. Install App Dependencies
+              cd app/Application
+              npm install
+
+              # 7. Build the application for production
+              npm run build
+
+              # 8. Start the App using PM2 in production mode
+              export PORT=5000
+              export NODE_ENV=production
+              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
+              export SESSION_SECRET="change-me-session-secret"
+              
+              # Run migrations
+              npm run db:push
+
+              pm2 start npm --name "reserve-menu" -- start
+
+              # 9. Save PM2 list so it restarts on reboot
+              pm2 save
+              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+
+              echo "Bootstrap complete!"
+              EOF
+  )
+  update_default_version = true
+
+  tags = {
+    Name = "${var.project_name}-launch-template"
   }
 }
-
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------
+
 resource "aws_autoscaling_group" "main" {
-  name                 = "${var.project_name}-asg"
-  # CRITICAL: Deploy servers in PRIVATE subnets for security
-  vpc_zone_identifier  = aws_subnet.private[*].id 
-  target_group_arns    = [aws_lb_target_group.main.arn]
-  health_check_type    = "ELB"
+  name                = "${var.project_name}-asg"
+  vpc_zone_identifier = aws_subnet.public[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
-  min_size             = var.min_size
-  max_size             = var.max_size
-  desired_capacity     = var.desired_capacity
+  min_size         = var.min_size
+  max_size         = var.max_size
+  desired_capacity = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
+
+  # Instance refresh configuration (for zero-downtime updates)
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${var.project_name}-asg-instance"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "ManagedBy"
+    value               = "AutoScaling"
+    propagate_at_launch = true
+  }
 }
 
-# Auto Scaling Policy - Scale Up (Mandatory)
+# ---------------------------------------------------------
+# AUTO SCALING POLICIES (Mandatory Requirement)
+# ---------------------------------------------------------
+
+# Scale Up Policy (Triggered by high CPU alarm)
 resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.project_name}-scale-up"
-  scaling_adjustment     = 1 # Adds 1 instance
+  scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
-# Auto Scaling Policy - Scale Down (Mandatory)
+# Scale Down Policy (Triggered by low CPU alarm)
 resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.project_name}-scale-down"
-  scaling_adjustment     = -1 # Removes 1 instance
+  scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
