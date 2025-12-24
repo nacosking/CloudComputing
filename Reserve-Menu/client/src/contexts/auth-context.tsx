@@ -46,7 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(JSON.parse(storedUser));
     }
     if (storedReservations) {
-      setReservations(JSON.parse(storedReservations));
+      // Map qrUrl to qrCode for all reservations loaded from storage
+      const parsed = JSON.parse(storedReservations);
+      setReservations(parsed.map((r: any) => ({ ...r, qrCode: r.qrCode || r.qrUrl })));
     }
   }, []);
 
@@ -91,10 +93,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("Failed to save reservation");
       }
 
+      // Map qrUrl to qrCode for the new reservation
       const savedReservation = await response.json();
-      setLastReservation(savedReservation);
-      setReservations((prev) => [...prev, savedReservation]);
-      return savedReservation;
+      const mappedReservation = { ...savedReservation, qrCode: savedReservation.qrCode || savedReservation.qrUrl };
+      setLastReservation(mappedReservation);
+      setReservations((prev) => [...prev, mappedReservation]);
+      return mappedReservation;
     } catch (error) {
       console.error("Error saving reservation:", error);
       throw error;
