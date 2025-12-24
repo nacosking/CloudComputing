@@ -70,10 +70,12 @@ export function buildUrl(path: string, params?: Record<string, string | number>)
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       // The backticks around :${key} are required to make it a string
+      //test
       if (url.includes(`:${key}`)) {
         url = url.replace(`:${key}`, String(value));
       }
     });
+
   }
   return url;
 }
