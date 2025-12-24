@@ -82,15 +82,15 @@ export function BookingForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Full Name</FormLabel>
-                  <FormControl><Input {...field} placeholder="Name" /></FormControl>
+                  <FormLabel htmlFor="name-input">Full Name</FormLabel>
+                  <FormControl><Input {...field} id="name-input" name="name" placeholder="Name" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl><Input {...field} type="email" placeholder="Email" /></FormControl>
+                  <FormLabel htmlFor="email-input">Email</FormLabel>
+                  <FormControl><Input {...field} id="email-input" name="email" type="email" placeholder="Email" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -99,11 +99,11 @@ export function BookingForm() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <FormField control={form.control} name="date" render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Date</FormLabel>
+                  <FormLabel htmlFor="date-input">Date</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                        <Button variant="outline" id="date-input" name="date" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
                           {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
@@ -118,9 +118,9 @@ export function BookingForm() {
               )} />
               <FormField control={form.control} name="time" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Time</FormLabel>
+                  <FormLabel htmlFor="time-input">Time</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Time" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger id="time-input" name="time"><SelectValue placeholder="Time" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {["17:00", "18:00", "19:00", "20:00", "21:00"].map(t => (
                         <SelectItem key={t} value={t}>{t} PM</SelectItem>
@@ -132,9 +132,9 @@ export function BookingForm() {
               )} />
               <FormField control={form.control} name="guests" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Guests</FormLabel>
+                  <FormLabel htmlFor="guests-input">Guests</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Size" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger id="guests-input" name="guests"><SelectValue placeholder="Size" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
                         <SelectItem key={n} value={n.toString()}>{n} Guests</SelectItem>
