@@ -1,19 +1,19 @@
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
-import { useAuth } from "@/contexts/auth-context"
-import { useLocation } from "wouter"
-import { Button } from "@/components/ui/button"
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
-import { CalendarIcon, Clock, Users, CheckCircle2 } from "lucide-react"
-import { format } from "date-fns"
-import { motion } from "framer-motion"
-import { useState } from "react"
-import { cn } from "@/lib/utils"
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useAuth } from "@/contexts/auth-context";
+import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { CalendarIcon, Clock, Users, CheckCircle2 } from "lucide-react";
+import { format } from "date-fns";
+import { motion } from "framer-motion";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
@@ -21,28 +21,26 @@ const formSchema = z.object({
   date: z.date({ required_error: "Date is required" }),
   time: z.string({ required_error: "Time is required" }),
   guests: z.string({ required_error: "Guests required" }),
-})
+});
 
 export function BookingForm() {
-  const [, navigate] = useLocation()
-  const { user, addReservation } = useAuth()
-
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [, navigate] = useLocation();
+  const { user, addReservation } = useAuth();
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: user?.name || "",
       email: user?.email || "",
-      time: "18:00", // Add this
-      guests: "2",    // Add this
+      time: "18:00", // Fixes "controlled vs uncontrolled" warning
+      guests: "2",   // Fixes "controlled vs uncontrolled" warning
     },
-  })
+  });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!user) return navigate("/login")
-
+    if (!user) return navigate("/login");
     try {
       await addReservation({
         name: values.name,
@@ -50,204 +48,111 @@ export function BookingForm() {
         date: format(values.date, "yyyy-MM-dd"),
         time: values.time,
         guests: values.guests === "more" ? 9 : parseInt(values.guests),
-      })
-
-      setIsSubmitted(true)
-
-      setTimeout(() => navigate("/payment"), 2000)
+      });
+      setIsSubmitted(true);
+      setTimeout(() => navigate("/payment"), 2000);
     } catch (e: any) {
-      setErrorMsg(e?.message || "Reservation failed")
+      setErrorMsg(e?.message || "Reservation failed");
     }
   }
 
   if (isSubmitted) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center p-10">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center p-10 bg-card rounded-xl border border-primary/20">
         <CheckCircle2 className="w-12 h-12 text-primary mx-auto mb-4" />
-        <h3 className="text-2xl font-bold">Reservation Confirmed</h3>
-        <p>Redirecting to payment...</p>
+        <h3 className="text-2xl font-bold mb-2 text-foreground">Reservation Confirmed</h3>
+        <p className="text-foreground/70">Redirecting to payment...</p>
       </motion.div>
-    )
+    );
   }
 
   return (
     <div className="relative">
       <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl blur-2xl opacity-60" />
-
-      <div className="relative bg-gradient-to-br from-card to-card/90 p-8 md:p-10 rounded-2xl shadow-2xl border border-primary/20">
+      <div className="relative bg-card p-8 md:p-10 rounded-2xl shadow-2xl border border-primary/20">
         <div className="mb-8">
           <h3 className="font-serif text-3xl font-bold mb-2 text-foreground">Reserve Your Table</h3>
           <p className="text-foreground/70 text-sm">Complete your booking in just a few steps</p>
         </div>
 
-        {errorMsg && (
-          <div className="mb-4 p-3 rounded-lg bg-red-100 text-red-700 border border-red-300">{errorMsg}</div>
-        )}
+        {errorMsg && <div className="mb-4 p-3 rounded-lg bg-red-100 text-red-700 border border-red-300">{errorMsg}</div>}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Name */}
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Name</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="John Doe" autoComplete="name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Email */}
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="email" placeholder="john@example.com" autoComplete="email" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="name" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full Name</FormLabel>
+                  <FormControl><Input {...field} placeholder="Name" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="email" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl><Input {...field} type="email" placeholder="Email" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* Date */}
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col relative group">
-                    <FormLabel className="text-foreground font-semibold flex items-center gap-2">
-                      <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                        <CalendarIcon className="w-4 h-4 text-primary" />
-                      </motion.div>
-                      Date
-                    </FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-4 pr-3 text-left font-normal rounded-lg h-12 transition-all",
-                                "bg-gradient-to-r from-background/80 to-primary/5 border-2 border-primary/30",
-                                !field.value ? "text-foreground/40" : "text-foreground font-medium"
-                              )}
-                            >
-                              <div className="flex flex-col flex-1">
-                                {field.value ? (
-                                  <>
-                                    <span className="text-xs text-foreground/60 uppercase tracking-wider">Selected</span>
-                                    <span className="text-sm font-serif">{format(field.value, "MMM dd, yyyy")}</span>
-                                  </>
-                                ) : (
-                                  <span className="text-sm">Pick your date</span>
-                                )}
-                              </div>
-                              <CalendarIcon className="w-5 h-5 text-primary opacity-70" />
-                            </Button>
-                          </motion.div>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-4" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < new Date() || date < new Date("1900-01-01")}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Time */}
-              <FormField
-                control={form.control}
-                name="time"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground font-semibold flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-primary" />
-                      Time
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <FormField control={form.control} name="date" render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Date</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
                       <FormControl>
-                        <SelectTrigger className="bg-background/80 border-primary/20 rounded-lg h-11">
-                          <SelectValue placeholder="Select time" />
-                        </SelectTrigger>
+                        <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                          {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
                       </FormControl>
-                      <SelectContent>
-                        {["17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00"].map((t) => (
-                          <SelectItem key={t} value={t}>{t.replace(':', ' : ')} PM</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Guests */}
-              <FormField
-                control={form.control}
-                name="guests"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground font-semibold flex items-center gap-2">
-                      <Users className="w-4 h-4 text-primary" />
-                      Guests
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="bg-background/80 border-primary/20 rounded-lg h-11">
-                          <SelectValue placeholder="Party size" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
-                          <SelectItem key={num} value={num.toString()}>
-                            {num} {num === 1 ? "Guest" : "Guests"}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="more">8+ (Call us)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date()} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="time" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Time</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Time" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {["17:00", "18:00", "19:00", "20:00", "21:00"].map(t => (
+                        <SelectItem key={t} value={t}>{t} PM</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="guests" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Guests</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Size" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+                        <SelectItem key={n} value={n.toString()}>{n} Guests</SelectItem>
+                      ))}
+                      <SelectItem value="more">8+ Guests</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </div>
 
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button
-                type="submit"
-                className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-lg shadow-lg transition-all"
-              >
-                {user ? "Confirm Reservation" : "Sign In to Book"}
-              </Button>
-            </motion.div>
-
-            {!user && (
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-foreground/60 text-sm text-center italic">
-                You'll need to sign in to complete your reservation
-              </motion.p>
-            )}
+            <Button type="submit" className="w-full h-12 text-lg font-serif bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+              {user ? "Confirm Reservation" : "Sign In to Book"}
+            </Button>
           </form>
         </Form>
       </div>
     </div>
-  )
+  );
 }
