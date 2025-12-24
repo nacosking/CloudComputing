@@ -2,6 +2,22 @@
 # COMPUTE: ALB, LAUNCH TEMPLATE, ASG
 # ---------------------------------------------------------
 
+# --- FIXED: Added Data Source Here to Fix "Undeclared Resource" Error ---
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 # Create Application Load Balancer
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
@@ -58,7 +74,7 @@ resource "aws_lb_listener" "http" {
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
 
-  # FIXED: Changed from amazon_linux to ubuntu (matches Main.tf)
+  # Now this will work because the data source is defined above
   image_id      = data.aws_ami.ubuntu.id
 
   instance_type = var.instance_type
@@ -74,7 +90,7 @@ resource "aws_launch_template" "main" {
     security_groups             = [aws_security_group.web.id]
   }
 
- user_data = base64encode(<<-EOF
+  user_data = base64encode(<<-EOF
               #!/bin/bash
               set -e
               exec > >(tee /var/log/user-data.log) 2>&1
