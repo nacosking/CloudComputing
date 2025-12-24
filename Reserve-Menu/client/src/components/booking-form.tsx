@@ -325,4 +325,5 @@ export function BookingForm() {
       </div>
     </div>
   );
+}
 // ...existing code...
