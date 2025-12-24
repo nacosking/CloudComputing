@@ -83,14 +83,31 @@ export function BookingForm() {
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem>
                   <FormLabel htmlFor="name-input">Full Name</FormLabel>
-                  <FormControl><Input {...field} id="name-input" name="name" placeholder="Name" /></FormControl>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      id="name-input"
+                      name="name"
+                      placeholder="Name"
+                      autoComplete="name"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel htmlFor="email-input">Email</FormLabel>
-                  <FormControl><Input {...field} id="email-input" name="email" type="email" placeholder="Email" /></FormControl>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      id="email-input"
+                      name="email"
+                      type="email"
+                      placeholder="Email"
+                      autoComplete="email"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -103,7 +120,13 @@ export function BookingForm() {
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" id="date-input" name="date" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                        <Button
+                          variant="outline"
+                          id="date-input"
+                          name="date"
+                          autoComplete="bday"
+                          className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                        >
                           {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
@@ -120,7 +143,11 @@ export function BookingForm() {
                 <FormItem>
                   <FormLabel htmlFor="time-input">Time</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger id="time-input" name="time"><SelectValue placeholder="Time" /></SelectTrigger></FormControl>
+                    <FormControl>
+                      <SelectTrigger id="time-input" name="time" autoComplete="off">
+                        <SelectValue placeholder="Time" />
+                      </SelectTrigger>
+                    </FormControl>
                     <SelectContent>
                       {["17:00", "18:00", "19:00", "20:00", "21:00"].map(t => (
                         <SelectItem key={t} value={t}>{t} PM</SelectItem>
@@ -134,7 +161,11 @@ export function BookingForm() {
                 <FormItem>
                   <FormLabel htmlFor="guests-input">Guests</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger id="guests-input" name="guests"><SelectValue placeholder="Size" /></SelectTrigger></FormControl>
+                    <FormControl>
+                      <SelectTrigger id="guests-input" name="guests" autoComplete="off">
+                        <SelectValue placeholder="Size" />
+                      </SelectTrigger>
+                    </FormControl>
                     <SelectContent>
                       {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
                         <SelectItem key={n} value={n.toString()}>{n} Guests</SelectItem>
