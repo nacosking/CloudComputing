@@ -1,13 +1,10 @@
 # ---------------------------------------------------------
-# DATA SOURCES (Only those needed for Compute)
+# DATA SOURCES (Compute Specific)
 # ---------------------------------------------------------
-# Note: "aws_availability_zones" was removed because it is in Main.tf
 
-data "aws_caller_identity" "current" {}
-
-data "aws_iam_instance_profile" "lab_profile" {
-  name = "LabInstanceProfile"
-}
+# Note: "aws_iam_instance_profile" removed (It is now in security.tf)
+# Note: "aws_caller_identity" is likely in Main.tf or security.tf,
+# but if you get an error about it missing, add it back here.
 
 # AMI Search: Ubuntu 24.04 LTS
 data "aws_ami" "ubuntu" {
@@ -26,53 +23,14 @@ data "aws_ami" "ubuntu" {
 }
 
 # ---------------------------------------------------------
-# SECURITY GROUPS
-# ---------------------------------------------------------
-resource "aws_security_group" "alb" {
-  name   = "${var.project_name}-alb-sg"
-  vpc_id = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_security_group" "web" {
-  name   = "${var.project_name}-web-sg"
-  vpc_id = aws_vpc.main.id
-
-  ingress {
-    from_port       = 5000
-    to_port         = 5000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# ---------------------------------------------------------
 # COMPUTE: ALB, LAUNCH TEMPLATE, ASG
 # ---------------------------------------------------------
+
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
   internal           = false
   load_balancer_type = "application"
+  # References security group defined in security.tf
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 }
@@ -110,16 +68,17 @@ resource "aws_launch_template" "main" {
   image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
 
+  # References the profile data source now located in security.tf
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
 
   network_interfaces {
     associate_public_ip_address = true
+    # References security group defined in security.tf
     security_groups             = [aws_security_group.web.id]
   }
 
-  # IMPORTANT: This User Data installs dependencies and runs the app
   user_data = base64encode(<<-EOF
               #!/bin/bash
               set -e
@@ -141,8 +100,6 @@ resource "aws_launch_template" "main" {
 
               export PORT=5000
               export NODE_ENV=production
-              # NOTE: We use your local SQLite database for simplicity in this demo
-              # Ideally, you would use an RDS endpoint here.
 
               pm2 start npm --name "reserve-menu" -- start
               pm2 save
@@ -163,26 +120,5 @@ resource "aws_autoscaling_group" "main" {
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
-  }
-}
-
-# ---------------------------------------------------------
-# STORAGE (S3)
-# ---------------------------------------------------------
-resource "aws_s3_bucket" "app_storage" {
-  bucket        = "${var.project_name}-storage-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "app_storage" {
-  bucket = aws_s3_bucket.app_storage.id
-  rule {
-    id     = "archive"
-    status = "Enabled"
-    filter { prefix = "" }
-    transition {
-      days          = 30
-      storage_class = "STANDARD_IA"
-    }
   }
 }
