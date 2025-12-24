@@ -92,9 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const savedReservation = await response.json();
-      // Update your local state here if needed
+      setLastReservation(savedReservation);
+      setReservations((prev) => [...prev, savedReservation]);
+      return savedReservation;
     } catch (error) {
       console.error("Error saving reservation:", error);
+      throw error;
     }
   };
 
