@@ -84,7 +84,7 @@ export function BookingForm() {
               type="text"
               id="date-native"
               name="date"
-              autoComplete="bday"
+              autoComplete="off"
               style={{ display: 'none' }}
               value={form.watch('date') ? format(form.watch('date'), 'yyyy-MM-dd') : ''}
               readOnly
@@ -152,7 +152,7 @@ export function BookingForm() {
                           variant="outline"
                           id="date-input"
                           name="date"
-                          autoComplete="bday"
+                          autoComplete="off"
                           className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
                         >
                           {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
