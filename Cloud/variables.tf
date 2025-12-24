@@ -86,3 +86,9 @@ variable "db_name" {
   type        = string
   default     = "appdb"
 }
+
+variable "db_engine_version" {
+  description = "The version of the PostgreSQL engine to use"
+  type        = string
+  default     = "16.1"  # Set a safe default like 16.1 or 15.5
+}
