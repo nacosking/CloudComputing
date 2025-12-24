@@ -8,7 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
 import { Lock, CreditCard, Check } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { QRCodeCanvas } from "qrcode.react";
 import { format, parseISO } from "date-fns";
 
 const paymentSchema = z.object({
@@ -36,6 +37,9 @@ export default function PaymentPage() {
   const reservation = lastReservation;
   const depositAmount = 50; // Fixed deposit amount in USD
 
+  // Ref for hidden QR code canvas
+  const qrRef = useRef(null);
+
   async function onSubmit(values: z.infer<typeof paymentSchema>) {
     setIsProcessing(true);
     // Simulate payment processing
@@ -53,7 +57,42 @@ export default function PaymentPage() {
       paidAt: new Date().toISOString(),
     });
 
-    markReservationPaid(reservation.id, qrData);
+    // Render QR code to hidden canvas and extract image
+    // Wait for next tick to ensure QR is rendered
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    let qrImageUrl = null;
+    if (qrRef.current) {
+      const canvas = qrRef.current.querySelector('canvas');
+      if (canvas) {
+        qrImageUrl = canvas.toDataURL('image/png');
+      }
+    }
+
+    // Upload QR image to backend if needed
+    let qrImageS3Url = null;
+    if (qrImageUrl) {
+      try {
+        const blob = await (await fetch(qrImageUrl)).blob();
+        const formData = new FormData();
+        formData.append('file', blob, `qr_${reservation.id}.png`);
+        formData.append('reservationId', reservation.id);
+        // Adjust endpoint as needed
+        const uploadRes = await fetch('/api/upload-qr', {
+          method: 'POST',
+          body: formData,
+        });
+        if (uploadRes.ok) {
+          const data = await uploadRes.json();
+          qrImageS3Url = data.url;
+        }
+      } catch (err) {
+        // Handle upload error
+        console.error('QR upload failed', err);
+      }
+    }
+
+    // Save S3 URL or fallback to qrData string
+    markReservationPaid(reservation.id, qrImageS3Url || qrData);
     setIsProcessing(false);
     setIsSuccess(true);
 
@@ -96,6 +135,26 @@ export default function PaymentPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted py-12 px-4">
+      {/* Hidden QR code for image extraction */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }} ref={qrRef} aria-hidden="true">
+        <QRCodeCanvas
+          value={JSON.stringify({
+            reservationId: reservation.id,
+            name: reservation.name,
+            date: reservation.date,
+            time: reservation.time,
+            guests: reservation.guests,
+            email: reservation.email,
+            paid: true,
+            paidAt: new Date().toISOString(),
+          })}
+          size={256}
+          level="H"
+          includeMargin={true}
+          bgColor="#ffffff"
+          fgColor="#000000"
+        />
+      </div>
       <div className="max-w-2xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
