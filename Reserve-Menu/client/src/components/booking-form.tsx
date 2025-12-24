@@ -150,9 +150,6 @@ export function BookingForm() {
                       <FormControl>
                         <Button
                           variant="outline"
-                          id="date-input"
-                          name="date"
-                          autoComplete="off"
                           className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
                         >
                           {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
@@ -172,7 +169,7 @@ export function BookingForm() {
                   <FormLabel htmlFor="time-input">Time</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
-                      <SelectTrigger id="time-input" name="time" autoComplete="off">
+                      <SelectTrigger>
                         <SelectValue placeholder="Time" />
                       </SelectTrigger>
                     </FormControl>
@@ -190,7 +187,7 @@ export function BookingForm() {
                   <FormLabel htmlFor="guests-input">Guests</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
-                      <SelectTrigger id="guests-input" name="guests" autoComplete="off">
+                      <SelectTrigger>
                         <SelectValue placeholder="Size" />
                       </SelectTrigger>
                     </FormControl>
