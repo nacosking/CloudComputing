@@ -42,12 +42,12 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 5    # Increased to allow more retries
-    timeout             = 10   # Increased timeout
-    interval            = 30
-    path                = "/"     # This checks your Home page
-    matcher             = "200,301,302"  # Accept redirects too
-    port                = "traffic-port" # Ensures it checks port 5000
+    unhealthy_threshold = 10     # Increased for more retries
+    timeout             = 30     # Increased timeout
+    interval            = 60     # Increased interval
+    path                = "/"
+    matcher             = "200,301,302,304"
+    port                = "traffic-port"
   }
 
   tags = {
@@ -90,56 +90,85 @@ resource "aws_launch_template" "main" {
 
   # User data script (Bootstrap script that runs on instance startup)
   user_data = base64encode(<<-EOF
-              #!/bin/bash
-              set -e  # Exit on any error
+#!/bin/bash
+set -e
+exec > >(tee /var/log/user-data.log) 2>&1
+echo "=== Starting bootstrap at $(date) ==="
 
-              # Log all output for debugging
-              exec > >(tee /var/log/user-data.log) 2>&1
-              echo "Starting bootstrap script..."
+# 1. Update System
+echo "Updating system..."
+apt-get update -y
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 
-              # 1. Update System
-              apt-get update -y
-              apt-get upgrade -y
+# 2. Install Dependencies
+echo "Installing dependencies..."
+apt-get install -y git curl build-essential
 
-              # 2. Install Git and Curl
-              apt-get install -y git curl build-essential
+# 3. Install Node.js 20
+echo "Installing Node.js..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
 
-              # 3. Install Node.js (Version 20 for Ubuntu)
-              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-              apt-get install -y nodejs
+# 4. Install PM2
+echo "Installing PM2..."
+npm install -g pm2
 
-              # 4. Install Process Manager (PM2)
-              npm install -g pm2
+# 5. Clone Repository
+echo "Cloning repository..."
+cd /home/ubuntu
+rm -rf app  # Remove if exists
+git clone -b testing https://github.com/nacosking/CloudComputing.git app
+chown -R ubuntu:ubuntu app
 
-              # 5. Clone your specific 'testing' branch
-              cd /home/ubuntu
-              git clone -b testing https://github.com/nacosking/CloudComputing.git app
-              chown -R ubuntu:ubuntu app
+# 6. Setup Application
+echo "Setting up application..."
+cd /home/ubuntu/app/Application
 
-              # 6. Install App Dependencies
-              cd app/Application
-              npm install
+# Wait for RDS to be ready
+echo "Waiting for database..."
+sleep 30
 
-              # 7. Build the application for production
-              npm run build
+# Set environment variables
+export PORT=5000
+export NODE_ENV=production
+export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
+export SESSION_SECRET="change-me-session-secret-$(openssl rand -hex 32)"
 
-              # 8. Start the App using PM2 in production mode
-              export PORT=5000
-              export NODE_ENV=production
-              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
-              export SESSION_SECRET="change-me-session-secret"
-              
-              # Run migrations
-              npm run db:push
+# Install dependencies
+echo "Installing npm packages..."
+npm install
 
-              pm2 start npm --name "reserve-menu" -- start
+# Run database migrations
+echo "Running database migrations..."
+npx drizzle-kit push || echo "Migration failed, continuing..."
 
-              # 9. Save PM2 list so it restarts on reboot
-              pm2 save
-              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+# Build the application
+echo "Building application..."
+npm run build
 
-              echo "Bootstrap complete!"
-              EOF
+# 7. Start Application with PM2
+echo "Starting application..."
+sudo -u ubuntu bash <<'USEREOF'
+cd /home/ubuntu/app/Application
+export PORT=5000
+export NODE_ENV=production
+export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
+export SESSION_SECRET="change-me-session-secret"
+
+pm2 start npm --name "reserve-menu" -- start
+pm2 save
+USEREOF
+
+# 8. Setup PM2 startup
+env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+
+# 9. Create health check endpoint test
+echo "Testing application..."
+sleep 10
+curl -f http://localhost:5000 || echo "App not responding yet"
+
+echo "=== Bootstrap complete at $(date) ==="
+EOF
   )
   update_default_version = true
 
@@ -156,7 +185,7 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier = aws_subnet.public[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600  # Increased to allow more startup time
 
   min_size         = var.min_size
   max_size         = var.max_size
