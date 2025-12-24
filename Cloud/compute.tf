@@ -1,30 +1,9 @@
 # ---------------------------------------------------------
-# DATA SOURCES (Compute Specific)
-# ---------------------------------------------------------
-
-# Note: "aws_iam_instance_profile" removed (It is now in security.tf)
-# Note: "aws_caller_identity" is likely in Main.tf or security.tf,
-# but if you get an error about it missing, add it back here.
-
-# AMI Search: Ubuntu 24.04 LTS
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-# ---------------------------------------------------------
 # COMPUTE: ALB, LAUNCH TEMPLATE, ASG
 # ---------------------------------------------------------
+
+# Note: We removed 'data "aws_ami" "ubuntu"' because it is now in Main.tf
+# Note: We removed 'data "aws_iam_instance_profile"' because it is now in security.tf
 
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
@@ -65,10 +44,11 @@ resource "aws_lb_listener" "http" {
 
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
+  # This correctly refers to the data source in Main.tf
   image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
 
-  # References the profile data source now located in security.tf
+  # References the profile data source in security.tf
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
