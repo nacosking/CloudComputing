@@ -14,8 +14,8 @@ resource "aws_db_subnet_group" "main" {
 
 resource "aws_db_instance" "main" {
   identifier               = "${var.project_name}-db"
-  engine                   = "mysql"
-  engine_version           = "8.0"
+  engine                   = "postgres"
+  engine_version           = "16.3"
   instance_class           = "db.t3.micro"
 
   # --- Role 3: Security ---

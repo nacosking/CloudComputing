@@ -108,14 +108,17 @@ resource "aws_launch_template" "main" {
               systemctl restart nginx
 
               # 8. (Optional) Set up backend if needed
-              cd /home/ubuntu/app/Reserve-Menu
-              # Ensure dependencies are installed (they might be from the build step, but good to be safe)
+             cd /home/ubuntu/app/Reserve-Menu
               npm install
-              # Start the app in the background so the script can finish
-              # Setting PORT=5000 ensures it matches your Target Group
+              
+              # Construct the Database URL using Terraform variables
+              # Format: postgres://USERNAME:PASSWORD@HOST:PORT/DBNAME
+              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
+              
+              # Start the app in the background
               PORT=5000 npm run start &
-
-              echo "Bootstrap complete on Ubuntu."
+              
+              echo "Bootstrap complete."
               EOF
   )
   update_default_version = true
