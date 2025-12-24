@@ -90,5 +90,5 @@ variable "db_name" {
 variable "db_engine_version" {
   description = "The version of the PostgreSQL engine to use"
   type        = string
-  default     = "16.1"  # Set a safe default like 16.1 or 15.5
+  default     = "16.6"  # Set a safe default like 16.1 or 15.5
 }
