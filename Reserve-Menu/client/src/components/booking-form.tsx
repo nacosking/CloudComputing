@@ -79,6 +79,34 @@ export function BookingForm() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Hidden native inputs for browser autofill and accessibility */}
+            <input
+              type="text"
+              id="date-native"
+              name="date"
+              autoComplete="bday"
+              style={{ display: 'none' }}
+              value={form.watch('date') ? format(form.watch('date'), 'yyyy-MM-dd') : ''}
+              readOnly
+            />
+            <input
+              type="text"
+              id="time-native"
+              name="time"
+              autoComplete="off"
+              style={{ display: 'none' }}
+              value={form.watch('time') || ''}
+              readOnly
+            />
+            <input
+              type="number"
+              id="guests-native"
+              name="guests"
+              autoComplete="off"
+              style={{ display: 'none' }}
+              value={form.watch('guests') || ''}
+              readOnly
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem>
