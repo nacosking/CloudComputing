@@ -62,7 +62,8 @@ resource "aws_launch_template" "main" {
   image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
 
-  # Attach IAM instance profile
+  # Attach IAM instance profile for S3 and CloudWatch access
+  # Uses the existing LabInstanceProfile provided by AWS Academy
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
@@ -73,78 +74,53 @@ resource "aws_launch_template" "main" {
     security_groups             = [aws_security_group.web.id]
   }
 
-  # User data script
+  # User data script (Bootstrap script that runs on instance startup)
   user_data = base64encode(<<-EOF
-    #!/bin/bash
-    exec > /var/log/user-data.log 2>&1
-    set -e
+              #!/bin/bash
 
-    echo "=== Starting bootstrap at $(date) ==="
+              # Log to a file for debugging
+              exec > >(tee /var/log/user-data.log) 2>&1
+              echo "Starting user-data bootstrap on Ubuntu..."
 
-    # 1. Install System Dependencies
-    apt-get update -y
-    apt-get install -y nodejs npm git wget postgresql-client
+              # 1. Update System (Ubuntu uses apt)
+              apt-get update -y
 
-    # 2. Install PM2 globally
-    npm install -g pm2
+              # 2. Install Git, Curl, and Nginx
+              apt-get install -y git curl nginx
 
-    # 3. Clone Repository (Branch: new_cloud)
-    cd /home/ubuntu
-    rm -rf app
-    # Clone the specific branch you created
-    git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
+              # 3. Install Node.js (Version 20 for Ubuntu)
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              apt-get install -y nodejs
 
-    # 4. Fix Permissions
-    chown -R ubuntu:ubuntu /home/ubuntu/app
+              # 4. Clone your specific 'new_cloud' branch
+              cd /home/ubuntu
+              git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
 
-    # 5. Build and Start the App (AS UBUNTU USER)
-    su - ubuntu -c '
-        # Navigate to your NEW folder structure
-        cd /home/ubuntu/app/Reserve-Menu
-        
-        echo "Installing dependencies..."
-        npm install
-        
-        echo "Building app..."
-        npm run build
+              # 5. Build the frontend (Reserve-Menu/client)
+              cd app/Reserve-Menu
+              npm install
+              npm run build
 
-        # Configure Environment Variables
-        export PORT=5000
-        export NODE_ENV=production
-        export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
-        export SESSION_SECRET="change-me-session-secret"
+              # 6. Copy build output to Nginx web root
+              cp -r dist/* /var/www/html/
 
-        # 6. Database Check
-        echo "Waiting for Database..."
-        until pg_isready -d $DATABASE_URL; do
-          echo "Database unavailable - sleeping..."
-          sleep 5
-        done
+              # 7. Restart Nginx to serve the frontend
+              systemctl restart nginx
 
-        # 7. Start with PM2
-        # We use the built Node server which handles BOTH Frontend and Backend
-        echo "Starting PM2..."
-        pm2 start dist/index.cjs --name "backend"
-        
-        # Save process list
-        pm2 save
-    '
+              # 8. (Optional) Set up backend if needed
+              # cd /home/ubuntu/app/Cloud
+              # npm install
+              # npm run start &
 
-    # 8. Setup PM2 Startup (As Root)
-    env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
-    systemctl start pm2-ubuntu
-    
-    echo "=== Bootstrap complete at $(date) ==="
-  EOF
+              echo "Bootstrap complete on Ubuntu."
+              EOF
   )
-
   update_default_version = true
 
   tags = {
     Name = "${var.project_name}-launch-template"
   }
 }
-
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------
