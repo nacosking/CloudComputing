@@ -2,15 +2,15 @@
 # S3 BUCKETS (Mandatory Requirement)
 # ---------------------------------------------------------
 
-# Get current AWS account ID (Used for unique bucket naming)
-data "aws_caller_identity" "current" {}
+# NOTE: data "aws_caller_identity" "current" is already defined in compute.tf
+# We can use it here without re-declaring it.
 
 # 1. Application Storage Bucket
 resource "aws_s3_bucket" "app_storage" {
-  # Uses Account ID for global uniqueness
+  # Uses Account ID from the common data source
   bucket = "${var.project_name}-app-storage-${data.aws_caller_identity.current.account_id}"
   # CRITICAL Lab Fix: Allows Terraform to delete the bucket even if it contains files
-  force_destroy = true 
+  force_destroy = true
 }
 
 # Enable versioning (Backup strategy)
@@ -39,22 +39,21 @@ resource "aws_s3_bucket_public_access_block" "app_storage" {
 # Lifecycle policy (Cost Optimization)
 resource "aws_s3_bucket_lifecycle_configuration" "app_storage" {
   bucket = aws_s3_bucket.app_storage.id
-  
+
   rule {
     id     = "transition-to-cheaper-storage"
     status = "Enabled"
 
-    # FIXED: Added required filter attribute (empty filter applies to all objects)
     filter {}
 
-    transition { 
+    transition {
       days          = 30
-      storage_class = "STANDARD_IA" 
+      storage_class = "STANDARD_IA"
     }
-    
-    transition { 
+
+    transition {
       days          = 90
-      storage_class = "GLACIER" 
+      storage_class = "GLACIER"
     }
   }
 }
@@ -62,7 +61,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_storage" {
 # 2. Backup Bucket
 resource "aws_s3_bucket" "backups" {
   bucket = "${var.project_name}-backups-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true 
+  force_destroy = true
 }
 
 # Block public access for backups
