@@ -40,16 +40,14 @@ export function BookingForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setErrorMsg(null);
 
+    // Check if user is logged in
     if (!user) {
-      // Corrected the console log here
-      console.log("Form Errors:", form.formState.errors);
       navigate("/login");
       return;
     }
 
+    // Prepare data
     const dateStr = format(values.date, "yyyy-MM-dd");
-
-    // Safely handle the "more" guests option
     const guestCount = values.guests === "more" ? 9 : parseInt(values.guests);
 
     const reservationData = {
