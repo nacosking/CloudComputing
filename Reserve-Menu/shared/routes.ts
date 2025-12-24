@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertReservationSchema, insertMenuItemSchema, insertCategorySchema, menuItems, categories, reservations } from '../shared/schema';
+import { insertReservationSchema, insertMenuItemSchema, insertCategorySchema, menuItems, categories, reservations } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
