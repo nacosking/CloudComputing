@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { apiRequest } from "../lib/queryClient"; // Import directly at the top
 
 export interface User {
-  id: string;
+  id: number; // Changed to number to match your RDS serial ID
   name: string;
   email: string;
 }
 
 export interface Reservation {
-  id: string;
-  userId: string;
+  id: number;
+  userId: number;
   name: string;
   email: string;
   date: string;
@@ -24,10 +25,11 @@ interface AuthContextType {
   reservations: Reservation[];
   lastReservation: Reservation | null;
   login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   logout: () => void;
-  addReservation: (reservation: Omit<Reservation, "id" | "userId" | "createdAt">) => Reservation;
-  cancelReservation: (reservationId: string) => void;
-  markReservationPaid: (reservationId: string, qrCodeData?: string) => void;
+  addReservation: (reservation: Omit<Reservation, "id" | "userId" | "createdAt">) => Promise<Reservation>;
+  cancelReservation: (reservationId: number) => void;
+  markReservationPaid: (reservationId: number, qrCodeData?: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,75 +39,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [lastReservation, setLastReservation] = useState<Reservation | null>(null);
 
-  // Load from localStorage on mount
+  // Load from RDS-session (or local fallback) on mount
   useEffect(() => {
     const storedUser = localStorage.getItem("lumiere_user");
-    const storedReservations = localStorage.getItem("lumiere_reservations");
-    
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
-    if (storedReservations) {
-      setReservations(JSON.parse(storedReservations));
-    }
   }, []);
 
-  // Save reservations to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("lumiere_reservations", JSON.stringify(reservations));
-  }, [reservations]);
-
-  const login = async (email: string, password: string) => {
-    // Mock authentication - in real app, this would call a backend
-    if (!email || password.length < 1) {
-      throw new Error("Invalid credentials");
-    }
-
-    const mockUser: User = {
-      id: `user_${Date.now()}`,
-      name: email.split("@")[0],
-      email,
-    };
-
-    setUser(mockUser);
-    localStorage.setItem("lumiere_user", JSON.stringify(mockUser));
+  const register = async (name: string, email: string, password: string, phone?: string) => {
+    // Hits the /api/register route in your auth.ts
+    const res = await apiRequest("POST", "/api/register", { name, email, password, phone });
+    const newUser = await res.json();
+    setUser(newUser);
+    localStorage.setItem("lumiere_user", JSON.stringify(newUser));
   };
 
-  const logout = () => {
+  const login = async (email: string, password: string) => {
+    // Authenticates via Passport.js on your EC2 instance
+    const res = await apiRequest("POST", "/api/login", { email, password });
+    const loggedUser = await res.json();
+    setUser(loggedUser);
+    localStorage.setItem("lumiere_user", JSON.stringify(loggedUser));
+  };
+
+  const logout = async () => {
+    await apiRequest("POST", "/api/logout");
     setUser(null);
     localStorage.removeItem("lumiere_user");
   };
 
-  const addReservation = (reservation: Omit<Reservation, "id" | "userId" | "createdAt">) => {
+  const addReservation = async (reservation: Omit<Reservation, "id" | "userId" | "createdAt">) => {
     if (!user) throw new Error("User not authenticated");
-
-    const newReservation: Reservation = {
-      ...reservation,
-      id: `res_${Date.now()}`,
-      userId: user.id,
-      createdAt: new Date().toISOString(),
-      paid: false,
-    };
-
-    setReservations([...reservations, newReservation]);
+    // Saves to the 'reservations' table in RDS
+    const res = await apiRequest("POST", "/api/reservations", reservation);
+    const newReservation = await res.json();
+    setReservations(prev => [...prev, newReservation]);
     setLastReservation(newReservation);
     return newReservation;
   };
 
-  const cancelReservation = (reservationId: string) => {
-    setReservations(reservations.filter((res) => res.id !== reservationId));
+  const cancelReservation = (reservationId: number) => {
+    setReservations(prev => prev.filter((res) => res.id !== reservationId));
   };
 
-  const markReservationPaid = (reservationId: string, qrCodeData?: string) => {
-    setReservations(
-      reservations.map((res) =>
+  const markReservationPaid = (reservationId: number, qrCodeData?: string) => {
+    setReservations(prev =>
+      prev.map((res) =>
         res.id === reservationId ? { ...res, paid: true, qrCode: qrCodeData } : res
       )
     );
   };
 
   return (
-    <AuthContext.Provider value={{ user, reservations, lastReservation, login, logout, addReservation, cancelReservation, markReservationPaid }}>
+    <AuthContext.Provider value={{ 
+      user, reservations, lastReservation, login, logout, 
+      addReservation, cancelReservation, markReservationPaid, register 
+    }}>
       {children}
     </AuthContext.Provider>
   );
