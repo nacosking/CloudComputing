@@ -67,42 +67,64 @@ resource "aws_launch_template" "main" {
     security_groups             = [aws_security_group.web.id]
   }
 
+  Here is the full, corrected user_data block for your compute.tf file.
+
+This version includes the PM2 fix we discovered (explicitly setting the home folder) and the Database Connection setup.
+
+📋 Copy this into your compute.tf
+Replace your current user_data = ... section with this exact block:
+
+Terraform
+
   user_data = base64encode(<<-EOF
               #!/bin/bash
               
+              # 1. Logging Setup (Crucial for debugging)
+              # This saves all output to /var/log/user-data.log so you can read it later
               exec > >(tee /var/log/user-data.log) 2>&1
               echo "Starting deployment..."
 
-              # 1. Update & Install
+              # 2. System Update & Tools
               apt-get update -y
               apt-get install -y git curl
 
-              # 2. Install Node.js 20
+              # 3. Install Node.js (Version 20 LTS)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
 
-              # 3. Install PM2
+              # 4. Install PM2 & Configure Global Path
+              # We set PM2_HOME explicitly so it works for Root and System restarts
               npm install -g pm2
+              export PM2_HOME=/etc/.pm2
 
-              # 4. Clone Repo
+              # 5. Clone Repository
               cd /home/ubuntu
+              # Cloning the specific branch 'new_cloud'
               git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
 
-              # 5. Build App
+              # 6. Install & Build Application
               cd app/Reserve-Menu
+              echo "Installing dependencies..."
               npm install
+              
+              echo "Building frontend..."
               npm run build
 
-              # 6. Set Environment Variables
-              # Uses the address from the RDS resource in database.tf
+              # 7. Configure Environment Variables
+              # Terraform fills in these values automatically
               export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
               export PORT=5000
               export NODE_ENV=production
 
-              # 7. Start with PM2
-              pm2 start npm --name "reserve-menu" -- run start
+              # 8. Start Application with PM2
+              echo "Starting server..."
+              # --update-env ensures the DATABASE_URL is locked into the process
+              pm2 start npm --name "reserve-menu" --update-env -- run start
+              
+              # 9. Save Process List & Generate Startup Script
+              # This ensures the app restarts automatically if the server reboots
               pm2 save
-              pm2 startup
+              pm2 startup systemd -u root --hp /etc/.pm2
 
               echo "Deployment complete."
               EOF
