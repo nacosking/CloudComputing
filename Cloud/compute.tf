@@ -85,39 +85,32 @@ resource "aws_launch_template" "main" {
               # 1. Update System (Ubuntu uses apt)
               apt-get update -y
 
-              # 2. Install Git and Curl
-              apt-get install -y git curl
+              # 2. Install Git, Curl, and Nginx
+              apt-get install -y git curl nginx
 
               # 3. Install Node.js (Version 20 for Ubuntu)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
 
-              # 4. Install Process Manager (PM2)
-              npm install -g pm2
-
-              # 5. Clone your specific 'testing' branch
+              # 4. Clone your specific 'new_cloud' branch
               cd /home/ubuntu
-              git clone -b testing https://github.com/nacosking/CloudComputing.git app
+              git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
 
-              # 6. Install App Dependencies
-              cd app/ReserveMenu/ReserveMenu
+              # 5. Build the frontend (Reserve-Menu/client)
+              cd app/Reserve-Menu
               npm install
-
-              # 7. Build the application for production
               npm run build
 
-              # 8. Environment variables for the app
-              export PORT=5000
-              export NODE_ENV=production
-              export S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
-              export AWS_REGION="${var.aws_region}"
+              # 6. Copy build output to Nginx web root
+              cp -r dist/* /var/www/html/
 
-              # 9. Start the App using PM2 on port 5000
-              pm2 start npm --name "reserve-menu" -- start
+              # 7. Restart Nginx to serve the frontend
+              systemctl restart nginx
 
-              # 10. Save PM2 list so it restarts on reboot
-              pm2 save
-              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+              # 8. (Optional) Set up backend if needed
+              # cd /home/ubuntu/app/Cloud
+              # npm install
+              # npm run start &
 
               echo "Bootstrap complete on Ubuntu."
               EOF
