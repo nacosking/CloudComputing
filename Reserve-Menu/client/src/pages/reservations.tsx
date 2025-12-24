@@ -89,8 +89,9 @@ export default function ReservationsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${cancelingId === reservation.id ? "opacity-50" : ""
-                  }`}
+                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${
+                  cancelingId === reservation.id ? "opacity-50" : ""
+                }`}
               >
                 <div className="grid md:grid-cols-2 gap-8">
                   <div>
