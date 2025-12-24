@@ -4,16 +4,20 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-// 1. I commented out the strict check preventing the app from starting
-// if (!process.env.DATABASE_URL) {
-//   throw new Error(
-//     "DATABASE_URL must be set. Did you forget to provision a database?",
-//   );
-// }
+// 1. ENABLE STRICT CHECK
+// In production, if this is missing, your app is useless. 
+// It is better to crash instantly so you know something is wrong.
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL must be set. Check your .env file or AWS PM2 configuration.",
+  );
+}
 
-// 2. I added a fallback "dummy" URL so the Pool doesn't crash immediately.
-// This is not a real database, it's just a placeholder string.
-const connectionString = process.env.DATABASE_URL || "postgres://user:pass@localhost:5432/db";
+// 2. Create the Connection Pool
+// We simply use the environment variable directly.
+export const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL,
+});
 
-export const pool = new Pool({ connectionString });
+// 3. Export Drizzle
 export const db = drizzle(pool, { schema });

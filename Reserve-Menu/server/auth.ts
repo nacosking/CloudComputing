@@ -44,19 +44,28 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // ---------------------------------------------------------
+  // 1. UPDATED STRATEGY: Login with Email
+  // ---------------------------------------------------------
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
-      try {
-        const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
-          return done(null, false);
-        } else {
-          return done(null, user);
+    new LocalStrategy(
+      // Configuration: Look for 'email' field in the request body
+      { usernameField: "email" }, 
+      async (email, password, done) => {
+        try {
+          // Changed: Find user by email instead of username
+          const user = await storage.getUserByEmail(email);
+          
+          if (!user || !(await comparePasswords(password, user.password))) {
+            return done(null, false);
+          } else {
+            return done(null, user);
+          }
+        } catch (err) {
+          return done(err);
         }
-      } catch (err) {
-        return done(err);
       }
-    }),
+    ),
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
@@ -69,11 +78,16 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // ---------------------------------------------------------
+  // 2. UPDATED REGISTER: Check Duplicate Email
+  // ---------------------------------------------------------
   app.post("/api/register", async (req, res, next) => {
     try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
+      // Changed: Check if EMAIL already exists (not username)
+      const existingUser = await storage.getUserByEmail(req.body.email);
+      
       if (existingUser) {
-        return res.status(400).send("Username already exists");
+        return res.status(400).send("Email already exists");
       }
 
       const hashedPassword = await hashPassword(req.body.password);
