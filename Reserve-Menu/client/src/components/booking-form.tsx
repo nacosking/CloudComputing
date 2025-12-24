@@ -39,20 +39,27 @@ export function BookingForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setErrorMsg(null);
+
     if (!user) {
+      // Corrected the console log here
+      console.log("Form Errors:", form.formState.errors);
       navigate("/login");
-      BookingForm: console.log("Form Errors:", form.formState.errors);
       return;
     }
 
     const dateStr = format(values.date, "yyyy-MM-dd");
+
+    // Safely handle the "more" guests option
+    const guestCount = values.guests === "more" ? 9 : parseInt(values.guests);
+
     const reservationData = {
       name: values.name,
       email: values.email,
       date: dateStr,
       time: values.time,
-      guests: parseInt(values.guests),
+      guests: guestCount,
     };
+
     try {
       await addReservation(reservationData);
       setIsSubmitted(true);
