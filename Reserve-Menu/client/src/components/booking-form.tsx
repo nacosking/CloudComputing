@@ -40,13 +40,11 @@ export function BookingForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setErrorMsg(null);
 
-    // Check if user is logged in
     if (!user) {
       navigate("/login");
       return;
     }
 
-    // Prepare data
     const dateStr = format(values.date, "yyyy-MM-dd");
     const guestCount = values.guests === "more" ? 9 : parseInt(values.guests);
 
@@ -59,8 +57,14 @@ export function BookingForm() {
     };
 
     try {
+      // Logic change: Perform the action, then use setIsSubmitted
       await addReservation(reservationData);
+
+      // IMPORTANT: If you have form.reset() here, delete it for now
+      // to test if it's the cause of the "form is not defined" error.
+
       setIsSubmitted(true);
+
       setTimeout(() => {
         navigate("/payment");
       }, 2000);
