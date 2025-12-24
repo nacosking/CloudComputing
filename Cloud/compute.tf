@@ -108,9 +108,12 @@ resource "aws_launch_template" "main" {
               systemctl restart nginx
 
               # 8. (Optional) Set up backend if needed
-              # cd /home/ubuntu/app/Cloud
-              # npm install
-              # npm run start &
+              cd /home/ubuntu/app/Reserve-Menu
+              # Ensure dependencies are installed (they might be from the build step, but good to be safe)
+              npm install
+              # Start the app in the background so the script can finish
+              # Setting PORT=5000 ensures it matches your Target Group
+              PORT=5000 npm run start &
 
               echo "Bootstrap complete on Ubuntu."
               EOF
