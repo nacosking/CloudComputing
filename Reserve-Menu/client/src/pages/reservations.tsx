@@ -48,7 +48,7 @@ export default function ReservationsPage() {
             <Button asChild variant="outline" className="border-background/30 text-background hover:bg-background hover:text-foreground">
               <a href="/">Home</a>
             </Button>
-            <Button 
+            <Button
               onClick={handleLogout}
               variant="ghost"
               className="text-background hover:bg-background/20"
@@ -89,20 +89,19 @@ export default function ReservationsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${
-                  cancelingId === reservation.id ? "opacity-50" : ""
-                }`}
+                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${cancelingId === reservation.id ? "opacity-50" : ""
+                  }`}
               >
                 <div className="grid md:grid-cols-2 gap-8">
                   <div>
                     <h3 className="font-serif text-2xl font-bold mb-6">Reservation Details</h3>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <p className="text-muted-foreground text-sm uppercase tracking-wider mb-1">Name</p>
                         <p className="font-medium text-lg">{reservation.name}</p>
                       </div>
-                      
+
                       <div>
                         <p className="text-muted-foreground text-sm uppercase tracking-wider mb-1">Email</p>
                         <p className="text-foreground">{reservation.email}</p>
@@ -117,7 +116,7 @@ export default function ReservationsPage() {
                               {format(parseISO(reservation.date), "MMM dd")}
                             </p>
                           </div>
-                          
+
                           <div className="flex flex-col items-center">
                             <Clock className="w-5 h-5 text-primary mb-2" />
                             <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Time</p>
@@ -125,7 +124,7 @@ export default function ReservationsPage() {
                               {reservation.time}
                             </p>
                           </div>
-                          
+
                           <div className="flex flex-col items-center">
                             <Users className="w-5 h-5 text-primary mb-2" />
                             <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Guests</p>
@@ -149,8 +148,8 @@ export default function ReservationsPage() {
                           Show this QR code when you arrive at the restaurant.
                         </p>
                         <div className="bg-background rounded-lg p-4 flex justify-center border border-primary/30">
-                          <QRCodeCanvas 
-                            value={reservation.qrCode} 
+                          <QRCodeCanvas
+                            value={reservation.qrCode}
                             size={160}
                             level="H"
                             includeMargin={true}
@@ -167,7 +166,7 @@ export default function ReservationsPage() {
                       <div className="bg-primary/5 border border-primary/20 rounded-lg p-6 mb-6">
                         <h4 className="font-serif text-lg font-bold mb-3">Confirmation</h4>
                         <p className="text-muted-foreground text-sm mb-4">
-                          Your table is reserved and waiting for you. 
+                          Your table is reserved and waiting for you.
                           Please arrive 5-10 minutes early.
                         </p>
                         <div className="p-3 bg-background rounded border border-primary/30">
@@ -177,7 +176,7 @@ export default function ReservationsPage() {
                       </div>
                     )}
 
-                    <Button 
+                    <Button
                       onClick={() => handleCancel(reservation.id)}
                       variant="ghost"
                       className="w-full border border-red-200 text-red-600 hover:bg-red-50 group"
