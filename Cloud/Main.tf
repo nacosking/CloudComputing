@@ -56,7 +56,6 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-<<<<<<< HEAD
 # 3. Ubuntu 22.04 LTS AMI
 # Automatically finds the latest Ubuntu image ID for EC2 instances.
 # Changed from Amazon Linux 2 because user_data script uses apt-get and /home/ubuntu
@@ -67,17 +66,6 @@ data "aws_ami" "amazon_linux" {
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-=======
-# 3. Ubuntu 24.04 LTS AMI
-# Automatically finds the latest Ubuntu image ID for EC2 instances.
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
->>>>>>> e5bdf4c6e85da8f1eef328d6ed5d6711c04bda7e
   }
 
   filter {
