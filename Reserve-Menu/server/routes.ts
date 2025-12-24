@@ -3,12 +3,15 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { insertReservationSchema } from "@shared/schema";
+import QRCode from "qrcode";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { z } from "zod";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const s3Client = new S3Client({ region: process.env.AWS_REGION || "us-east-1" });
   // Set up authentication routes
   setupAuth(app);
 
@@ -40,8 +43,28 @@ export async function registerRoutes(
   app.post("/api/reservations", async (req, res) => {
     try {
       const input = insertReservationSchema.parse(req.body);
+      // 1. Save Initial Reservation to DB
       const reservation = await storage.createReservation(input);
-      res.status(201).json(reservation);
+
+      // 2. Generate QR Code as a Buffer (encode reservation id and name)
+      const qrData = JSON.stringify({ id: reservation.id, name: reservation.name });
+      const qrBuffer = await QRCode.toBuffer(qrData);
+
+      // 3. Upload to S3
+      const bucketName = process.env.S3_BUCKET_NAME;
+      const s3Key = `users/${reservation.userId || 'guest'}/reservations/${reservation.id}/qr.png`;
+      await s3Client.send(new PutObjectCommand({
+        Bucket: bucketName,
+        Key: s3Key,
+        Body: qrBuffer,
+        ContentType: "image/png",
+      }));
+
+      // 4. Construct URL and Update Reservation in DB
+      const qrUrl = `https://${bucketName}.s3.amazonaws.com/${s3Key}`;
+      const updatedReservation = await storage.updateReservationQrUrl(reservation.id, qrUrl);
+
+      res.status(201).json(updatedReservation);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({
@@ -49,7 +72,8 @@ export async function registerRoutes(
           field: err.errors[0].path.join('.'),
         });
       }
-      throw err;
+      console.error("S3/QR Error:", err);
+      res.status(500).json({ message: "Failed to process reservation" });
     }
   });
 
