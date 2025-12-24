@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { insertReservationSchema, insertMenuItemSchema, insertCategorySchema, menuItems, categories, reservations } from "@shared/schema";
+import { insertReservationSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(
