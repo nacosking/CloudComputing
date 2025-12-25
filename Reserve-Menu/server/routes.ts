@@ -4,49 +4,40 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { insertReservationSchema } from "@shared/schema";
 import { z } from "zod";
-import { createServer } from "http";
-import { Pool } from "pg";
-
-// 1. Setup Database Connection for the NEW Dynamic Menu
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "",
-  ssl: {
-    rejectUnauthorized: false // This tells Node to accept the RDS self-signed cert
-  }
-});
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // --- PRESERVED LOGIC: Authentication ---
+  
+  // 1. Setup Authentication
   setupAuth(app);
 
-  // ============================================================
-  //  NEW FEATURE: ADMIN MENU MANAGEMENT (Direct RDS Access)
-  // ============================================================
-
-  // 1. GET MENU (For Customers & Admin)
-  app.get('/api/menu', async (req, res) => {
+  // 2. Automated Startup: Seed the database if empty
+  // This ensures data is always there on the first visit
+  (async () => {
     try {
-      const result = await pool.query(`
-        SELECT m.*, c.name as category, c.id as category_table_id
-        FROM menu_items m 
-        LEFT JOIN categories c ON m.category_id = c.id 
-        ORDER BY m.id ASC
-      `);
+      await seedDatabase();
+    } catch (e) {
+      console.error("Startup Seed Error:", e);
+    }
+  })();
 
-      // Debug: log the raw results
-      console.log("Raw DB Results:", result.rows);
+  // ============================================================
+  //   DYNAMIC MENU ROUTES (Using Unified Storage)
+  // ============================================================
+
+  // GET MENU: Fetches items and categories in one go
+  app.get('/api/menu', async (_req, res) => {
+    try {
+      const items = await storage.getMenuItemsWithCategories();
 
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
       
-      result.rows.forEach(item => {
-        // Debug each item
-        console.log(`Item: ${item.name}, category_id: ${item.category_id}, category: ${item.category}`);
+      items.forEach(item => {
+        let catName = item.categoryName ? item.categoryName.toLowerCase() : 'uncategorized';
         
-        let catName = item.category ? item.category.toLowerCase() : 'uncategorized';
-        
+        // Mapping DB Category names to Frontend Tabs
         if (catName === 'starters') catName = 'breakfast';
         if (catName === 'mains') catName = 'lunch';
         if (catName === 'desserts' || catName === 'drinks') catName = 'dinner';
@@ -58,99 +49,66 @@ export async function registerRoutes(
       
       res.json(menuData);
     } catch (err) {
-      console.error("DB Error:", err);
+      console.error("Menu Fetch Error:", err);
       res.json({ breakfast: [], lunch: [], dinner: [] });
     }
   });
 
-  // 2. ADD ITEM (For Admin)
+  // ADD ITEM: Uses storage method instead of raw SQL
   app.post('/api/menu', async (req, res) => {
-    const { category, name, price, description } = req.body;
-    
-    // DEBUG: This will show in PM2 logs exactly what the frontend is sending
-    console.log(`Attempting to add item. Category received: "${category}"`);
-
     try {
-      const result = await pool.query(
-        `INSERT INTO menu_items (category_id, name, price, description) 
-         VALUES (
-           COALESCE(
-             (SELECT id FROM categories WHERE slug = LOWER($1) OR name = $1 LIMIT 1),
-             (SELECT id FROM categories LIMIT 1) -- Fallback to first category if no match
-           ), 
-           $2, $3, $4
-         ) RETURNING *`,
-        [category, name, price, description]
+      // First, we find the category ID based on the name sent from frontend
+      const cats = await storage.getCategories();
+      const category = cats.find(c => 
+        c.slug === req.body.category.toLowerCase() || 
+        c.name === req.body.category
       );
-      res.json(result.rows[0]);
+
+      if (!category) {
+        return res.status(400).json({ error: "Invalid category" });
+      }
+
+      const newItem = await storage.createMenuItem({
+        categoryId: category.id,
+        name: req.body.name,
+        price: parseInt(req.body.price),
+        description: req.body.description,
+        available: true
+      });
+
+      res.json(newItem);
     } catch (err) {
-      console.error("DB Add Error:", err);
+      console.error("Add Item Error:", err);
       res.status(500).json({ error: 'Failed to add item' });
     }
   });
 
-  // 3. UPDATE ITEM (Fixed: Uses category_id and a subquery)
+  // UPDATE ITEM
   app.put('/api/menu/:id', async (req, res) => {
-    const { id } = req.params;
-    const { name, price, description, category } = req.body;
     try {
-      const result = await pool.query(
-        `UPDATE menu_items 
-         SET name = $1, 
-             price = $2, 
-             description = $3, 
-             category_id = (SELECT id FROM categories WHERE slug = $4 OR name = $4 LIMIT 1) 
-         WHERE id = $5 RETURNING *`,
-        [name, price, description, category.toLowerCase(), id]
-      );
-      if (result.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
-      res.json(result.rows[0]);
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateMenuItem(id, req.body);
+      res.json(updated);
     } catch (err) {
-      console.error("DB Update Error:", err);
-      res.status(500).json({ error: 'Failed to update item' });
+      res.status(500).json({ error: 'Update failed' });
     }
   });
 
-  // 4. DELETE ITEM (For Admin) - NEW!
+  // DELETE ITEM
   app.delete('/api/menu/:id', async (req, res) => {
-    const { id } = req.params;
     try {
-      await pool.query('DELETE FROM menu_items WHERE id = $1', [id]);
-      res.json({ message: 'Item deleted' });
+      const id = parseInt(req.params.id);
+      await storage.deleteMenuItem(id);
+      res.json({ message: 'Deleted successfully' });
     } catch (err) {
-      console.error("DB Delete Error:", err);
-      res.status(500).json({ error: 'Failed to delete item' });
+      res.status(500).json({ error: 'Delete failed' });
     }
   });
 
   // ============================================================
-  //  PRESERVED LOGIC: OLD ROUTES (Reservations & Legacy Menu)
+  //   RESERVATIONS & CATEGORIES
   // ============================================================
 
-  app.get("/api/categories", async (req, res) => {
-    const categories = await storage.getCategories();
-    res.json(categories);
-  });
-
-  app.get("/api/categories/:id", async (req, res) => {
-    const category = await storage.getCategory(Number(req.params.id));
-    if (!category) return res.status(404).json({ message: 'Category not found' });
-    res.json(category);
-  });
-
-  app.get("/api/menu-items", async (req, res) => {
-    const categoryId = req.query.categoryId ? Number(req.query.categoryId) : undefined;
-    const items = await storage.getMenuItems(categoryId);
-    res.json(items);
-  });
-
-  app.get("/api/menu-items/:id", async (req, res) => {
-    const item = await storage.getMenuItem(Number(req.params.id));
-    if (!item) return res.status(404).json({ message: 'Menu item not found' });
-    res.json(item);
-  });
-
-  // RESERVATIONS (Untouched)
   app.post("/api/reservations", async (req, res) => {
     try {
       const input = insertReservationSchema.parse(req.body);
@@ -163,37 +121,33 @@ export async function registerRoutes(
           field: err.errors[0].path.join('.'),
         });
       }
-      throw err;
+      res.status(500).json({ error: "Reservation failed" });
     }
   });
 
-  // Seed (Optional/Untouched)
-  try { await seedDatabase(); } catch (e) { /* ignore seed errors */ }
+  app.get("/api/categories", async (_req, res) => {
+    const categories = await storage.getCategories();
+    res.json(categories);
+  });
 
   return httpServer;
 }
 
-// Keep the seed function exactly as it was
+// Optimized Seed Function
 export async function seedDatabase() {
   const categories = await storage.getCategories();
   if (categories.length === 0) {
-    // Create categories first and store their IDs
+    console.log("Seeding Database...");
     const starters = await storage.createCategory({ name: "Starters", slug: "starters" });
     const mains = await storage.createCategory({ name: "Mains", slug: "mains" });
     const desserts = await storage.createCategory({ name: "Desserts", slug: "desserts" });
-    const drinks = await storage.createCategory({ name: "Drinks", slug: "drinks" });
 
-    // Log to verify IDs
-    console.log("Created categories:", { starters: starters.id, mains: mains.id, desserts: desserts.id, drinks: drinks.id });
-
-    // Then create menu items with the correct categoryId
     await storage.createMenuItem({ 
       categoryId: starters.id, 
       name: "Bruschetta", 
       description: "Grilled bread with tomatoes and basil", 
       price: 800, 
-      available: true, 
-      imageUrl: "..." 
+      available: true 
     });
     
     await storage.createMenuItem({ 
@@ -201,28 +155,9 @@ export async function seedDatabase() {
       name: "Grilled Salmon", 
       description: "Fresh atlantic salmon with herbs", 
       price: 2400, 
-      available: true, 
-      imageUrl: "..." 
+      available: true 
     });
     
-    await storage.createMenuItem({ 
-      categoryId: mains.id, 
-      name: "Ribeye Steak", 
-      description: "12oz ribeye steak cooked to perfection", 
-      price: 3200, 
-      available: true, 
-      imageUrl: "..." 
-    });
-    
-    await storage.createMenuItem({ 
-      categoryId: desserts.id, 
-      name: "Tiramisu", 
-      description: "Coffee-flavoured Italian dessert", 
-      price: 900, 
-      available: true, 
-      imageUrl: "..." 
-    });
-    
-    console.log("Seed completed successfully!");
+    console.log("Seed completed!");
   }
 }

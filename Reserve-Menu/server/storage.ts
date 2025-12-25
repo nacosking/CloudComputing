@@ -9,28 +9,35 @@ import {
 import { eq } from "drizzle-orm";
 import session from "express-session";
 import createMemoryStore from "memorystore";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"; // AWS SDK v3
-import QRCode from "qrcode"; // QR Code Generator
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import QRCode from "qrcode";
 
 const MemoryStore = createMemoryStore(session);
-
-// AWS S3 Configuration - Using LabRole (no credentials needed)
 const s3Client = new S3Client({ region: "us-east-1" });
-// const BUCKET_NAME = "customer-reservations-qr-759145289015";
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || "";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  
+  // Menu Methods
   getCategories(): Promise<Category[]>;
   getCategory(id: number): Promise<Category | undefined>;
   getMenuItems(categoryId?: number): Promise<MenuItem[]>;
   getMenuItem(id: number): Promise<MenuItem | undefined>;
-  createReservation(reservation: InsertReservation): Promise<Reservation>;
-  updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation>;
+  getMenuItemsWithCategories(): Promise<(MenuItem & { categoryName: string })[]>; // Added for consistency
+  
+  // Admin Methods
   createCategory(category: InsertCategory): Promise<Category>;
   createMenuItem(item: InsertMenuItem): Promise<MenuItem>;
+  updateMenuItem(id: number, item: Partial<InsertMenuItem>): Promise<MenuItem>; // Added
+  deleteMenuItem(id: number): Promise<void>; // Added
+
+  // Reservation Methods
+  createReservation(reservation: InsertReservation): Promise<Reservation>;
+  updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation>;
+  
   sessionStore: session.Store;
 }
 
@@ -38,29 +45,52 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
-    });
+    this.sessionStore = new MemoryStore({ checkPeriod: 86400000 });
   }
 
-  // --- Reservation Logic with S3 ---
+  // --- Unified Menu Logic ---
+
+  async getMenuItemsWithCategories(): Promise<(MenuItem & { categoryName: string })[]> {
+    const result = await db
+      .select({
+        id: menuItems.id,
+        categoryId: menuItems.categoryId,
+        name: menuItems.name,
+        description: menuItems.description,
+        price: menuItems.price,
+        imageUrl: menuItems.imageUrl,
+        available: menuItems.available,
+        categoryName: categories.name,
+      })
+      .from(menuItems)
+      .leftJoin(categories, eq(menuItems.categoryId, categories.id));
+    
+    return result;
+  }
+
+  async updateMenuItem(id: number, item: Partial<InsertMenuItem>): Promise<MenuItem> {
+    const [updated] = await db
+      .update(menuItems)
+      .set(item)
+      .where(eq(menuItems.id, id))
+      .returning();
+    if (!updated) throw new Error("Item not found");
+    return updated;
+  }
+
+  async deleteMenuItem(id: number): Promise<void> {
+    await db.delete(menuItems).where(eq(menuItems.id, id));
+  }
+
+  // --- Keep Existing Reservation/Auth Logic ---
+
   async createReservation(insertReservation: InsertReservation): Promise<Reservation> {
-    // 1. Insert reservation into DB first to get an ID
     const [reservation] = await db.insert(reservations).values(insertReservation).returning();
-
     try {
-      // 2. Generate QR Code as a Buffer
-      // We encode the reservation ID and name for the QR data
-      const qrData = JSON.stringify({
-        id: reservation.id,
-        name: reservation.name,
-        date: reservation.date
-      });
+      const qrData = JSON.stringify({ id: reservation.id, name: reservation.name, date: reservation.date });
       const qrBuffer = await QRCode.toBuffer(qrData);
-
-      // 3. Upload to S3
-      // Inside DatabaseStorage class -> createReservation method
       const fileName = `reservations/${reservation.id}/qr_${Date.now()}_${Math.floor(Math.random() * 1000)}.png`;
+      
       await s3Client.send(new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: fileName,
@@ -68,29 +98,19 @@ export class DatabaseStorage implements IStorage {
         ContentType: "image/png"
       }));
 
-      // 4. Update the DB with the new S3 URL
       const qrUrl = `https://${BUCKET_NAME}.s3.amazonaws.com/${fileName}`;
       return await this.updateReservationQrUrl(reservation.id, qrUrl);
-
     } catch (error) {
       console.error("QR/S3 Error:", error);
-      // Fallback: return the reservation even if QR fails
       return reservation;
     }
   }
 
   async updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation> {
-    const [updated] = await db
-      .update(reservations)
-      .set({ qrUrl })
-      .where(eq(reservations.id, id))
-      .returning();
-
-    if (!updated) throw new Error("Reservation not found");
+    const [updated] = await db.update(reservations).set({ qrUrl }).where(eq(reservations.id, id)).returning();
     return updated;
   }
 
-  // ... rest of your existing methods (getUser, getCategories, etc.) ...
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
