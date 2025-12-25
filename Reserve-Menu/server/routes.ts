@@ -26,17 +26,30 @@ export async function registerRoutes(
   // 1. GET MENU (For Customers & Admin)
   app.get('/api/menu', async (req, res) => {
     try {
+      // 1. Fetch the data (We get category_id here)
       const result = await pool.query('SELECT * FROM menu_items ORDER BY id ASC');
-      // Format for frontend tabs
+      
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
+      
       result.rows.forEach(item => {
-        if (!menuData[item.category]) menuData[item.category] = [];
-        menuData[item.category].push(item);
+        // 2. TRANSLATE ID TO NAME
+        let catName = 'other';
+        
+        // Check your database IDs (1=Starters, 2=Mains, 3=Desserts)
+        // Map them to what your Frontend wants (breakfast, lunch, dinner)
+        if (item.category_id === 1) catName = 'breakfast';
+        if (item.category_id === 2) catName = 'lunch';
+        if (item.category_id === 3) catName = 'dinner';
+        if (item.category_id === 4) catName = 'dinner'; 
+
+        // 3. Put it in the correct list
+        if (!menuData[catName]) menuData[catName] = [];
+        menuData[catName].push(item);
       });
+      
       res.json(menuData);
     } catch (err) {
       console.error("DB Error:", err);
-      // Fallback to empty if DB fails, so app doesn't crash
       res.json({ breakfast: [], lunch: [], dinner: [] });
     }
   });
