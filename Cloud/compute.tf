@@ -133,9 +133,9 @@ resource "aws_launch_template" "main" {
         # 4. Generate .env File (FIXED: Uses <<-EOT to strip spaces)
         echo "Creating .env file..."
         cat <<-EOT > .env
-DATABASE_URL="postgresql://dbadmin:SecurePass%232025%21@cloud-project-db.cjw1tqy2i0kb.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=no-verify"
-S3_BUCKET_NAME="cloud-project-app-storage-135739449447"
-AWS_REGION="us-east-1"
+DATABASE_URL="postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=no-verify"
+S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
+AWS_REGION="${var.aws_region}"
 PORT=5000
 NODE_ENV=production
 EOT
