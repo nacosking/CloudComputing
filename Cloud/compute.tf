@@ -71,80 +71,103 @@ resource "aws_lb_listener" "http" {
 # LAUNCH TEMPLATE (Mandatory Requirement)
 # ---------------------------------------------------------
 
+# ---------------------------------------------------------
+# LAUNCH TEMPLATE
+# Handles EC2 configuration, user permissions, and app deployment
+# ---------------------------------------------------------
+
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
-
-  # Now this will work because the data source is defined above
   image_id      = data.aws_ami.ubuntu.id
-
   instance_type = var.instance_type
 
-  # Attach IAM instance profile for S3 and CloudWatch access
-  # Uses the data source defined in security.tf
+  # 1. IAM Permissions (S3 & CloudWatch Access)
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
 
+  # 2. Network Configuration (Security Groups & Public IP)
   network_interfaces {
     associate_public_ip_address = true
     security_groups             = [aws_security_group.web.id]
   }
 
+  # 3. User Data Script (Runs on first boot)
   user_data = base64encode(<<-EOF
-              #!/bin/bash
-              # 1. Logging Setup (Crucial for debugging)
-              exec > >(tee /var/log/user-data.log) 2>&1
-              echo "Starting deployment..."
+    #!/bin/bash
+    
+    # --- A. LOGGING SETUP ---
+    # Redirect all output to /var/log/user-data.log for debugging
+    exec > >(tee /var/log/user-data.log) 2>&1
+    echo "Starting deployment..."
 
-              # 2. System Update & Tools
-              apt-get update -y
-              apt-get install -y git curl postgresql-client
+    # --- B. PRE-INSTALLATION CHECKS ---
+    # Wait for automatic system updates to finish to prevent "apt lock" errors
+    while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
+        echo "Waiting for other software managers to finish..." 
+        sleep 1
+    done
 
-              # 3. Install Node.js (Version 20 LTS)
-              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-              apt-get install -y nodejs
+    # --- C. SYSTEM DEPENDENCIES ---
+    apt-get update -y
+    apt-get install -y git curl postgresql-client
 
-              # 4. Install PM2 & Configure Global Path
-              npm install -g pm2
-              export PM2_HOME=/etc/.pm2
+    # Install Node.js 20 (LTS)
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
 
-              # 5. Clone Repository
-              cd /home/ubuntu
-              git clone -b master https://github.com/nacosking/CloudComputing.git app
+    # --- D. DIRECTORY SETUP ---
+    # Create app directory and transfer ownership to 'ubuntu' user
+    mkdir -p /home/ubuntu/app
+    chown -R ubuntu:ubuntu /home/ubuntu/app
 
-              # 6. Install & Build Application
-              cd app/Reserve-Menu
-              echo "Installing dependencies..."
-              npm install
-              npm install @aws-sdk/client-s3 qrcode # Ensure these are installed
-              
-              echo "Building application..."
-              npm run build
+    # --- E. APPLICATION DEPLOYMENT (Run as 'ubuntu' user) ---
+    # Using 'su - ubuntu' ensures files are owned by the user, not root
+    su - ubuntu -c '
+        echo "Running setup as user: $(whoami)"
+        
+        # 1. Install PM2 globally
+        sudo npm install -g pm2
+        
+        # 2. Clone Repository
+        cd /home/ubuntu
+        rm -rf app
+        git clone -b master https://github.com/nacosking/CloudComputing.git app
+        
+        # 3. Install Project Dependencies
+        cd /home/ubuntu/app/Reserve-Menu
+        echo "Installing npm packages..."
+        npm install
+        npm install @aws-sdk/client-s3 qrcode
+        
+        # 4. Generate .env File (Crucial for Persistence)
+        echo "Creating .env file..."
+        cat <<EOT > .env
+        DATABASE_URL="postgresql://dbadmin:SecurePass%232025%21@cloud-project-db.cjw1tqy2i0kb.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=no-verify"
+        S3_BUCKET_NAME="cloud-project-app-storage-135739449447"
+        AWS_REGION="us-east-1"
+        PORT=5000
+        NODE_ENV=production
+        EOT
 
-              # 7. Configure Environment Variables
-              # Added the S3_BUCKET_NAME and AWS_REGION you mentioned earlier
-              export DATABASE_URL="postgresql://dbadmin:SecurePass%232025%21@cloud-project-db.cjw1tqy2i0kb.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=require"
-              export S3_BUCKET_NAME="cloud-project-app-storage-135739449447"
-              export AWS_REGION="us-east-1"
-              export PORT=5000
-              export NODE_ENV=production
+        # 5. Build and Start Application
+        echo "Building application..."
+        npm run build
+        
+        echo "Starting PM2..."
+        pm2 start dist/index.cjs --name "reserve-menu"
+        pm2 save
+    '
 
-              # 8. Start Application with PM2
-              echo "Starting server..."
-              # Added --update-env to ensure PM2 locks in the export variables
-              pm2 start dist/index.cjs --name "reserve-menu" --update-env
-              
-              # 9. Save Process List & Generate Startup Script
-              # This specific command handles the systemd setup automatically
-              pm2 save
-              env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
+    # --- F. FINAL SYSTEM CONFIGURATION ---
+    # Configure PM2 to start automatically on system reboot
+    env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
+    systemctl start pm2-ubuntu
 
-              echo "Deployment complete."
-              EOF
+    echo "Deployment complete!"
+  EOF
   )
-
 }
-
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------
