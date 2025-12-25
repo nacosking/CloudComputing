@@ -123,9 +123,9 @@ resource "aws_launch_template" "main" {
 
               # 7. Configure Environment Variables
               # Added the S3_BUCKET_NAME and AWS_REGION you mentioned earlier
-              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}?sslmode=require"
-              export S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
-              export AWS_REGION="${var.aws_region}"
+              export DATABASE_URL="postgresql://dbadmin:SecurePass%232025%21@cloud-project-db.cjw1tqy2i0kb.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=require"
+              export S3_BUCKET_NAME="cloud-project-app-storage-135739449447"
+              export AWS_REGION="us-east-1"
               export PORT=5000
               export NODE_ENV=production
 
