@@ -86,7 +86,6 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    # Redirect logs to a file so you can debug if something goes wrong
     exec > >(tee /var/log/user-data.log) 2>&1
     
     echo "--- Starting Initialization ---"
@@ -99,18 +98,16 @@ resource "aws_launch_template" "main" {
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y nodejs
 
-    # 2. Setup Directory & Clone (Run as root, fix permissions later)
+    # 2. Setup Directory & Clone
     mkdir -p /home/ubuntu/app
     
-    # Clone directly into the target folder
-    # Note: We clone into a temp folder and move it to ensure the structure is correct
+    # Clone into temp and move to ensure permissions are clean later
     git clone -b master https://github.com/nacosking/CloudComputing.git /home/ubuntu/repo_temp
     mv /home/ubuntu/repo_temp/* /home/ubuntu/app/
     rm -rf /home/ubuntu/repo_temp
 
     # 3. Create .env file
-    # We do this as root so we don't need complex quoting. 
-    # Terraform replaces the variables ${...} here before the script ever runs.
+    # Terraform will fill in the variables below automatically
     echo "Creating .env file..."
     cat <<EOT > /home/ubuntu/app/Reserve-Menu/.env
 DATABASE_URL="postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=no-verify"
@@ -121,11 +118,9 @@ NODE_ENV=production
 EOT
 
     # 4. Fix Permissions
-    # Give the 'ubuntu' user full ownership of the app directory
     chown -R ubuntu:ubuntu /home/ubuntu/app
 
-    # 5. Build and Start App (Switch to ubuntu user safely)
-    # We use a specific command string rather than a massive block
+    # 5. Build and Start App (Switch to ubuntu user)
     echo "Switching to ubuntu user for installation..."
     su - ubuntu -c "
       cd /home/ubuntu/app/Reserve-Menu
@@ -145,7 +140,7 @@ EOT
       pm2 save
     "
 
-    # 6. Finalize PM2 startup (Must be run as root)
+    # 6. Finalize PM2 startup
     env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
     systemctl start pm2-ubuntu
     systemctl enable pm2-ubuntu
