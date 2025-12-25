@@ -9,7 +9,7 @@ import { Pool } from "pg";
 
 // 1. Setup Database Connection for the NEW Dynamic Menu
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgres://dbadmin:SecurePass2025@cloud-project-db.cu8gzw5dvnqx.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=require",
+  connectionString: process.env.DATABASE_URL || "",
 });
 
 export async function registerRoutes(
@@ -26,23 +26,25 @@ export async function registerRoutes(
   // 1. GET MENU (For Customers & Admin)
   app.get('/api/menu', async (req, res) => {
     try {
-      // 1. Fetch the data (We get category_id here)
-      const result = await pool.query('SELECT * FROM menu_items ORDER BY id ASC');
-      
+      // This query joins the two tables so 'category' is no longer undefined
+      const result = await pool.query(`
+        SELECT m.*, c.name as category 
+        FROM menu_items m 
+        LEFT JOIN categories c ON m.category_id = c.id 
+        ORDER BY m.id ASC
+      `);
+
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
       
       result.rows.forEach(item => {
-        // 2. TRANSLATE ID TO NAME
-        let catName = 'other';
+        // Convert database names (Starters/Mains) to frontend keys (breakfast/lunch)
+        let catName = item.category ? item.category.toLowerCase() : 'other';
         
-        // Check your database IDs (1=Starters, 2=Mains, 3=Desserts)
-        // Map them to what your Frontend wants (breakfast, lunch, dinner)
-        if (item.category_id === 1) catName = 'breakfast';
-        if (item.category_id === 2) catName = 'lunch';
-        if (item.category_id === 3) catName = 'dinner';
-        if (item.category_id === 4) catName = 'dinner'; 
+        // Mapping logic to match your frontend tabs
+        if (catName === 'starters') catName = 'breakfast';
+        if (catName === 'mains') catName = 'lunch';
+        if (catName === 'desserts' || catName === 'drinks') catName = 'dinner';
 
-        // 3. Put it in the correct list
         if (!menuData[catName]) menuData[catName] = [];
         menuData[catName].push(item);
       });
