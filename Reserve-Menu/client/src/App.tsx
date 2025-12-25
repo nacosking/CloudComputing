@@ -9,6 +9,7 @@ import LoginPage from "@/pages/login";
 import ReservationsPage from "@/pages/reservations";
 import PaymentPage from "@/pages/payment";
 import { AuthProvider } from "@/contexts/auth-context";
+import AdminPage from "@/pages/AdminPage";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/reservations" component={ReservationsPage} />
       <Route path="/payment" component={PaymentPage} />
       <Route component={NotFound} />
+      <Route path="/admin" component={AdminPage} />
     </Switch>
   );
 }
