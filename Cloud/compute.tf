@@ -136,7 +136,7 @@ cd /home/ubuntu
 # Clone repository
 echo "Cloning repository..."
 rm -rf app
-git clone -b master https://github.com/nacosking/CloudComputing.git app
+git clone -b softcode https://github.com/nacosking/CloudComputing.git app
 
 # Navigate to application directory
 cd /home/ubuntu/app/Reserve-Menu
