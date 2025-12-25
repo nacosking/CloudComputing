@@ -30,8 +30,12 @@ export default function PaymentPage() {
   });
 
   if (!lastReservation) {
-    navigate("/");
-    return null;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <p className="text-muted-foreground mb-4">Finalizing reservation details...</p>
+        <Button onClick={() => navigate("/")}>Return Home</Button>
+      </div>
+    );
   }
 
   const reservation = lastReservation;

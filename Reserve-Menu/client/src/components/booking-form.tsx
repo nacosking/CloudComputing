@@ -36,26 +36,35 @@ export function BookingForm() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user) {
       navigate("/login");
       return;
     }
 
-    const dateStr = format(values.date, "yyyy-MM-dd");
+    try {
+      const dateStr = format(values.date, "yyyy-MM-dd");
 
-    addReservation({
-      name: values.name,
-      email: values.email,
-      date: dateStr,
-      time: values.time,
-      guests: parseInt(values.guests),
-    });
+      // 1. AWAIT the result so lastReservation is set in the context
+      await addReservation({
+        name: values.name,
+        email: values.email,
+        date: dateStr,
+        time: values.time,
+        guests: parseInt(values.guests),
+      });
 
-    setIsSubmitted(true);
-    setTimeout(() => {
-      navigate("/payment");
-    }, 2000);
+      // 2. Only show success after the DB has confirmed (201 Created)
+      setIsSubmitted(true);
+
+      // 3. Move to payment page after the animation
+      setTimeout(() => {
+        navigate("/payment");
+      }, 2000);
+    } catch (error) {
+      console.error("Reservation failed:", error);
+      // Add a toast or alert here if you want to show the error
+    }
   }
 
   if (isSubmitted) {
