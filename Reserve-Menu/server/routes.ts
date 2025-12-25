@@ -61,19 +61,23 @@ export async function registerRoutes(
   });
 
   // 2. ADD ITEM (For Admin)
-  // 2. ADD ITEM (For Admin)
-// 2. ADD ITEM (Corrected to use category_id via subquery)
-  // 2. ADD ITEM (Fixed: Uses category_id and a subquery)
   app.post('/api/menu', async (req, res) => {
     const { category, name, price, description } = req.body;
+    
+    // DEBUG: This will show in PM2 logs exactly what the frontend is sending
+    console.log(`Attempting to add item. Category received: "${category}"`);
+
     try {
       const result = await pool.query(
         `INSERT INTO menu_items (category_id, name, price, description) 
          VALUES (
-           (SELECT id FROM categories WHERE slug = $1 OR name = $1 LIMIT 1), 
+           COALESCE(
+             (SELECT id FROM categories WHERE slug = LOWER($1) OR name = $1 LIMIT 1),
+             (SELECT id FROM categories LIMIT 1) -- Fallback to first category if no match
+           ), 
            $2, $3, $4
          ) RETURNING *`,
-        [category.toLowerCase(), name, price, description]
+        [category, name, price, description]
       );
       res.json(result.rows[0]);
     } catch (err) {
