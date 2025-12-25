@@ -70,12 +70,6 @@ resource "aws_lb_listener" "http" {
 # ---------------------------------------------------------
 # LAUNCH TEMPLATE (Mandatory Requirement)
 # ---------------------------------------------------------
-
-# ---------------------------------------------------------
-# LAUNCH TEMPLATE
-# Handles EC2 configuration, user permissions, and app deployment
-# ---------------------------------------------------------
-
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
   image_id      = data.aws_ami.ubuntu.id
@@ -97,12 +91,10 @@ resource "aws_launch_template" "main" {
     #!/bin/bash
     
     # --- A. LOGGING SETUP ---
-    # Redirect all output to /var/log/user-data.log for debugging
     exec > >(tee /var/log/user-data.log) 2>&1
     echo "Starting deployment..."
 
     # --- B. PRE-INSTALLATION CHECKS ---
-    # Wait for automatic system updates to finish to prevent "apt lock" errors
     while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
         echo "Waiting for other software managers to finish..." 
         sleep 1
@@ -117,12 +109,10 @@ resource "aws_launch_template" "main" {
     apt-get install -y nodejs
 
     # --- D. DIRECTORY SETUP ---
-    # Create app directory and transfer ownership to 'ubuntu' user
     mkdir -p /home/ubuntu/app
     chown -R ubuntu:ubuntu /home/ubuntu/app
 
     # --- E. APPLICATION DEPLOYMENT (Run as 'ubuntu' user) ---
-    # Using 'su - ubuntu' ensures files are owned by the user, not root
     su - ubuntu -c '
         echo "Running setup as user: $(whoami)"
         
@@ -140,15 +130,15 @@ resource "aws_launch_template" "main" {
         npm install
         npm install @aws-sdk/client-s3 qrcode
         
-        # 4. Generate .env File (Crucial for Persistence)
+        # 4. Generate .env File (FIXED: Uses <<-EOT to strip spaces)
         echo "Creating .env file..."
-        cat <<EOT > .env
-        DATABASE_URL="postgresql://dbadmin:SecurePass%232025%21@cloud-project-db.cjw1tqy2i0kb.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=no-verify"
-        S3_BUCKET_NAME="cloud-project-app-storage-135739449447"
-        AWS_REGION="us-east-1"
-        PORT=5000
-        NODE_ENV=production
-        EOT
+        cat <<-EOT > .env
+DATABASE_URL="postgresql://dbadmin:SecurePass%232025%21@cloud-project-db.cjw1tqy2i0kb.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=no-verify"
+S3_BUCKET_NAME="cloud-project-app-storage-135739449447"
+AWS_REGION="us-east-1"
+PORT=5000
+NODE_ENV=production
+EOT
 
         # 5. Build and Start Application
         echo "Building application..."
@@ -160,7 +150,6 @@ resource "aws_launch_template" "main" {
     '
 
     # --- F. FINAL SYSTEM CONFIGURATION ---
-    # Configure PM2 to start automatically on system reboot
     env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
     systemctl start pm2-ubuntu
 
