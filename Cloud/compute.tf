@@ -110,7 +110,7 @@ resource "aws_launch_template" "main" {
 
               # 5. Clone Repository
               cd /home/ubuntu
-              git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
+              git clone -b master https://github.com/nacosking/CloudComputing.git app
 
               # 6. Install & Build Application
               cd app/Reserve-Menu
