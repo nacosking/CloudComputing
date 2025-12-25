@@ -136,7 +136,7 @@ EOT
       npm run build
 
       echo 'Starting PM2...'
-      pm2 start dist/index.cjs --name 'reserve-menu'
+      pm2 start dist/index.cjs --name 'reserve-menu' --node-args='-r dotenv/config'
       pm2 save
     "
 
