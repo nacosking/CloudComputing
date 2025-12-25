@@ -9,6 +9,7 @@ import LoginPage from "@/pages/login";
 import ReservationsPage from "@/pages/reservations";
 import PaymentPage from "@/pages/payment";
 import { AuthProvider } from "@/contexts/auth-context";
+import AdminPage from "@/pages/AdminPage";
 
 function Router() {
   return (
@@ -17,6 +18,11 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/reservations" component={ReservationsPage} />
       <Route path="/payment" component={PaymentPage} />
+
+      {/* MOVE ADMIN HERE, BEFORE THE CATCH-ALL */}
+      <Route path="/admin" component={AdminPage} />
+
+      {/* This must always be last */}
       <Route component={NotFound} />
     </Switch>
   );

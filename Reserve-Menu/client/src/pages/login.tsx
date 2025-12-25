@@ -28,10 +28,20 @@ export default function LoginPage() {
   async function onSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
     setError("");
-    
+
     try {
       await login(values.email, values.password);
-      navigate("/reservations");
+
+      // --- NEW LOGIC START ---
+      // Check if the user is an admin based on email
+      if (values.email.toLowerCase() === "admin@lumiere.com") {
+        navigate("/admin");
+      } else {
+        // Regular customers go to reservations
+        navigate("/reservations");
+      }
+      // --- NEW LOGIC END ---
+
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -67,10 +77,10 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email Address</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="you@example.com" 
+                      <Input
+                        placeholder="you@example.com"
                         type="email"
-                        {...field} 
+                        {...field}
                         className="bg-background"
                         disabled={isLoading}
                       />
@@ -87,8 +97,8 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="••••••••" 
+                      <Input
+                        placeholder="••••••••"
                         type="password"
                         {...field}
                         className="bg-background"
@@ -110,8 +120,8 @@ export default function LoginPage() {
                 </motion.div>
               )}
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full h-12 text-lg bg-primary hover:bg-primary/90"
                 disabled={isLoading}
               >
