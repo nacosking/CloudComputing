@@ -9,7 +9,7 @@ import { Pool } from "pg";
 
 // 1. Setup Database Connection for the NEW Dynamic Menu
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "",
+  connectionString: process.env.DATABASE_URL || "postgres://dbadmin:SecurePass2025@cloud-project-db.cu8gzw5dvnqx.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=require",
 });
 
 export async function registerRoutes(
@@ -27,24 +27,27 @@ export async function registerRoutes(
   app.get('/api/menu', async (req, res) => {
     try {
       const result = await pool.query(`
-        SELECT m.*, c.name as category 
+        SELECT m.*, c.name as category, c.id as category_table_id
         FROM menu_items m 
         LEFT JOIN categories c ON m.category_id = c.id 
         ORDER BY m.id ASC
       `);
 
+      // Debug: log the raw results
+      console.log("Raw DB Results:", result.rows);
+
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
       
       result.rows.forEach(item => {
-        // Handle null/undefined category gracefully
-        let catName = item.category ? item.category.toLowerCase() : 'other';
+        // Debug each item
+        console.log(`Item: ${item.name}, category_id: ${item.category_id}, category: ${item.category}`);
         
-        // Mapping logic to match your frontend tabs
+        let catName = item.category ? item.category.toLowerCase() : 'uncategorized';
+        
         if (catName === 'starters') catName = 'breakfast';
         if (catName === 'mains') catName = 'lunch';
         if (catName === 'desserts' || catName === 'drinks') catName = 'dinner';
 
-        // Only add to known categories
         if (menuData[catName]) {
           menuData[catName].push(item);
         }
@@ -155,14 +158,52 @@ export async function registerRoutes(
 export async function seedDatabase() {
   const categories = await storage.getCategories();
   if (categories.length === 0) {
+    // Create categories first and store their IDs
     const starters = await storage.createCategory({ name: "Starters", slug: "starters" });
     const mains = await storage.createCategory({ name: "Mains", slug: "mains" });
     const desserts = await storage.createCategory({ name: "Desserts", slug: "desserts" });
     const drinks = await storage.createCategory({ name: "Drinks", slug: "drinks" });
 
-    await storage.createMenuItem({ categoryId: starters.id, name: "Bruschetta", description: "Grilled bread...", price: 800, available: true, imageUrl: "..." });
-    await storage.createMenuItem({ categoryId: mains.id, name: "Grilled Salmon", description: "Fresh atlantic...", price: 2400, available: true, imageUrl: "..." });
-    await storage.createMenuItem({ categoryId: mains.id, name: "Ribeye Steak", description: "12oz ribeye...", price: 3200, available: true, imageUrl: "..." });
-    await storage.createMenuItem({ categoryId: desserts.id, name: "Tiramisu", description: "Coffee-flavoured...", price: 900, available: true, imageUrl: "..." });
+    // Log to verify IDs
+    console.log("Created categories:", { starters: starters.id, mains: mains.id, desserts: desserts.id, drinks: drinks.id });
+
+    // Then create menu items with the correct categoryId
+    await storage.createMenuItem({ 
+      categoryId: starters.id, 
+      name: "Bruschetta", 
+      description: "Grilled bread with tomatoes and basil", 
+      price: 800, 
+      available: true, 
+      imageUrl: "..." 
+    });
+    
+    await storage.createMenuItem({ 
+      categoryId: mains.id, 
+      name: "Grilled Salmon", 
+      description: "Fresh atlantic salmon with herbs", 
+      price: 2400, 
+      available: true, 
+      imageUrl: "..." 
+    });
+    
+    await storage.createMenuItem({ 
+      categoryId: mains.id, 
+      name: "Ribeye Steak", 
+      description: "12oz ribeye steak cooked to perfection", 
+      price: 3200, 
+      available: true, 
+      imageUrl: "..." 
+    });
+    
+    await storage.createMenuItem({ 
+      categoryId: desserts.id, 
+      name: "Tiramisu", 
+      description: "Coffee-flavoured Italian dessert", 
+      price: 900, 
+      available: true, 
+      imageUrl: "..." 
+    });
+    
+    console.log("Seed completed successfully!");
   }
 }
