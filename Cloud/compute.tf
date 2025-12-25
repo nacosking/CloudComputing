@@ -70,17 +70,11 @@ resource "aws_lb_listener" "http" {
 # ---------------------------------------------------------
 # LAUNCH TEMPLATE (Mandatory Requirement)
 # ---------------------------------------------------------
-
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
-
-  # Now this will work because the data source is defined above
   image_id      = data.aws_ami.ubuntu.id
-
   instance_type = var.instance_type
 
-  # Attach IAM instance profile for S3 and CloudWatch access
-  # Uses the data source defined in security.tf
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
@@ -91,85 +85,75 @@ resource "aws_launch_template" "main" {
   }
 
   user_data = base64encode(<<-EOF
-#!/bin/bash
-
-# --- A. LOGGING SETUP ---
-# Redirect all output to /var/log/user-data.log for debugging
-exec > >(tee /var/log/user-data.log) 2>&1
-echo "Starting deployment..."
-
-# --- B. PRE-INSTALLATION CHECKS ---
-# Wait for automatic system updates to finish to prevent "apt lock" errors
-while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
-    echo "Waiting for other software managers to finish..." 
-    sleep 1
-done
-
-# --- C. SYSTEM DEPENDENCIES ---
-# Prevent interactive pop-ups (pink screens)
-export DEBIAN_FRONTEND=noninteractive
-
-apt-get update -y
-apt-get install -y git curl postgresql-client
-
-# Install Node.js 20 (LTS)
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt-get install -y nodejs
-
-# --- D. DIRECTORY SETUP ---
-# Create app directory and transfer ownership to 'ubuntu' user
-mkdir -p /home/ubuntu/app
-chown -R ubuntu:ubuntu /home/ubuntu/app
-
-# --- E. APPLICATION DEPLOYMENT (Run as 'ubuntu' user) ---
-# Using 'su - ubuntu' ensures files are owned by the user, not root
-su - ubuntu -c '
-    echo "Running setup as user: $(whoami)"
+    #!/bin/bash
+    # Redirect logs to a file so you can debug if something goes wrong
+    exec > >(tee /var/log/user-data.log) 2>&1
     
-    # 1. Install PM2 globally
-    sudo npm install -g pm2
+    echo "--- Starting Initialization ---"
+
+    # 1. Install System Dependencies
+    apt-get update -y
+    apt-get install -y git curl postgresql-client
     
-    # 2. Clone Repository
-    cd /home/ubuntu
-    rm -rf app
-    # CHANGED: "master" to "main" (common cause of failure)
-    git clone -b master https://github.com/nacosking/CloudComputing.git app
+    # Install Node.js 20
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+
+    # 2. Setup Directory & Clone (Run as root, fix permissions later)
+    mkdir -p /home/ubuntu/app
     
-    # 3. Install Project Dependencies
-    cd /home/ubuntu/app/Reserve-Menu
-    echo "Installing npm packages..."
-    npm install
-    npm install @aws-sdk/client-s3 qrcode
-    
-    # 4. Generate .env File (Crucial for Persistence)
+    # Clone directly into the target folder
+    # Note: We clone into a temp folder and move it to ensure the structure is correct
+    git clone -b master https://github.com/nacosking/CloudComputing.git /home/ubuntu/repo_temp
+    mv /home/ubuntu/repo_temp/* /home/ubuntu/app/
+    rm -rf /home/ubuntu/repo_temp
+
+    # 3. Create .env file
+    # We do this as root so we don't need complex quoting. 
+    # Terraform replaces the variables ${...} here before the script ever runs.
     echo "Creating .env file..."
-    cat <<EOT > .env
-DATABASE_URL="postgresql://dbadmin:SecurePass%232025%21@cloud-project-db.cjw1tqy2i0kb.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=no-verify"
-S3_BUCKET_NAME="cloud-project-app-storage-135739449447"
-AWS_REGION="us-east-1"
+    cat <<EOT > /home/ubuntu/app/Reserve-Menu/.env
+DATABASE_URL="postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=no-verify"
+S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
+AWS_REGION="${var.aws_region}"
 PORT=5000
 NODE_ENV=production
 EOT
 
-    # 5. Build and Start Application
-    echo "Building application..."
-    npm run build
-    
-    echo "Starting PM2..."
-    pm2 start dist/index.cjs --name "reserve-menu"
-    pm2 save
-'
+    # 4. Fix Permissions
+    # Give the 'ubuntu' user full ownership of the app directory
+    chown -R ubuntu:ubuntu /home/ubuntu/app
 
-# --- F. FINAL SYSTEM CONFIGURATION ---
-# Configure PM2 to start automatically on system reboot
-env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
-systemctl start pm2-ubuntu
+    # 5. Build and Start App (Switch to ubuntu user safely)
+    # We use a specific command string rather than a massive block
+    echo "Switching to ubuntu user for installation..."
+    su - ubuntu -c "
+      cd /home/ubuntu/app/Reserve-Menu
+      
+      echo 'Installing global PM2...'
+      sudo npm install -g pm2
 
-echo "Deployment complete!"
-EOF
+      echo 'Installing dependencies...'
+      npm install
+      npm install @aws-sdk/client-s3 qrcode
+
+      echo 'Building...'
+      npm run build
+
+      echo 'Starting PM2...'
+      pm2 start dist/index.cjs --name 'reserve-menu'
+      pm2 save
+    "
+
+    # 6. Finalize PM2 startup (Must be run as root)
+    env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
+    systemctl start pm2-ubuntu
+    systemctl enable pm2-ubuntu
+
+    echo "--- Deployment Complete ---"
+  EOF
   )
 }
-
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------
