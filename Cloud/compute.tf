@@ -121,24 +121,44 @@ EOT
     chown -R ubuntu:ubuntu /home/ubuntu/app
 
     # 5. Build and Start App (Switch to ubuntu user)
+    # 5. Build and Start App (Switch to ubuntu user)
     echo "Switching to ubuntu user for installation..."
-    su - ubuntu -c "
+    su - ubuntu -c '
       cd /home/ubuntu/app/Reserve-Menu
       
-      echo 'Installing global PM2...'
+      echo "Installing global PM2..."
       sudo npm install -g pm2
 
-      echo 'Installing dependencies...'
+      echo "Installing dependencies..."
       npm install
       npm install @aws-sdk/client-s3 qrcode
 
-      echo 'Building...'
+      echo "Building..."
       npm run build
 
-      echo 'Starting PM2...'
-      pm2 start dist/index.cjs --name 'reserve-menu' --node-args='-r dotenv/config'
+      # --- THE FIX: Generate PM2 Ecosystem File ---
+      # This injects Terraform variables directly into PM2 config
+      echo "Generating ecosystem.config.js..."
+      cat <<JS_CONFIG > ecosystem.config.js
+module.exports = {
+  apps : [{
+    name   : "reserve-menu",
+    script : "dist/index.cjs",
+    env: {
+      DATABASE_URL: "postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=no-verify",
+      S3_BUCKET_NAME: "${aws_s3_bucket.app_storage.id}",
+      AWS_REGION: "${var.aws_region}",
+      PORT: 5000,
+      NODE_ENV: "production"
+    }
+  }]
+}
+JS_CONFIG
+
+      echo "Starting PM2 with Ecosystem..."
+      pm2 start ecosystem.config.js
       pm2 save
-    "
+    '
 
     # 6. Finalize PM2 startup
     env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
