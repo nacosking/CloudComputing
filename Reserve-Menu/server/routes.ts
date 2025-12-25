@@ -26,7 +26,6 @@ export async function registerRoutes(
   // 1. GET MENU (For Customers & Admin)
   app.get('/api/menu', async (req, res) => {
     try {
-      // This query joins the two tables so 'category' is no longer undefined
       const result = await pool.query(`
         SELECT m.*, c.name as category 
         FROM menu_items m 
@@ -37,7 +36,7 @@ export async function registerRoutes(
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
       
       result.rows.forEach(item => {
-        // Convert database names (Starters/Mains) to frontend keys (breakfast/lunch)
+        // Handle null/undefined category gracefully
         let catName = item.category ? item.category.toLowerCase() : 'other';
         
         // Mapping logic to match your frontend tabs
@@ -45,8 +44,10 @@ export async function registerRoutes(
         if (catName === 'mains') catName = 'lunch';
         if (catName === 'desserts' || catName === 'drinks') catName = 'dinner';
 
-        if (!menuData[catName]) menuData[catName] = [];
-        menuData[catName].push(item);
+        // Only add to known categories
+        if (menuData[catName]) {
+          menuData[catName].push(item);
+        }
       });
       
       res.json(menuData);
