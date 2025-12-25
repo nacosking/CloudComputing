@@ -92,41 +92,57 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              set -e
+              # 1. Logging Setup (Crucial for debugging)
               exec > >(tee /var/log/user-data.log) 2>&1
+              echo "Starting deployment..."
 
-              # 1. Update & Install Tools
+              # 2. System Update & Tools
               apt-get update -y
-              apt-get install -y git curl build-essential postgresql-client
+              apt-get install -y git curl postgresql-client
 
-              # 2. Install Node.js 20
+              # 3. Install Node.js (Version 20 LTS)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
+
+              # 4. Install PM2 & Configure Global Path
               npm install -g pm2
+              export PM2_HOME=/etc/.pm2
 
-              # 3. Clone the CORRECT branch
+              # 5. Clone Repository
               cd /home/ubuntu
-              git clone -b cloud_features https://github.com/nacosking/CloudComputing.git app
-              chown -R ubuntu:ubuntu app
+              git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
 
-              # 4. Install Dependencies
-              cd app/ReserveMenu/ReserveMenu
+              # 6. Install & Build Application
+              cd app/Reserve-Menu
+              echo "Installing dependencies..."
               npm install
+              npm install @aws-sdk/client-s3 qrcode # Ensure these are installed
+              
+              echo "Building application..."
               npm run build
 
-              # 5. Start App with Database Connection
+              # 7. Configure Environment Variables
+              # Added the S3_BUCKET_NAME and AWS_REGION you mentioned earlier
+              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}?sslmode=require"
+              export S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
+              export AWS_REGION="${var.aws_region}"
               export PORT=5000
               export NODE_ENV=production
 
-              # IMPORTANT: This injects the RDS details so the app can connect
-              # Ensure 'aws_db_instance.main' matches your database.tf resource name
-              export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
-
-              pm2 start npm --name "reserve-menu" -- start
+              # 8. Start Application with PM2
+              echo "Starting server..."
+              # Added --update-env to ensure PM2 locks in the export variables
+              pm2 start dist/index.cjs --name "reserve-menu" --update-env
+              
+              # 9. Save Process List & Generate Startup Script
+              # This specific command handles the systemd setup automatically
               pm2 save
-              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+              env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
+
+              echo "Deployment complete."
               EOF
   )
+
 }
 
 # ---------------------------------------------------------
