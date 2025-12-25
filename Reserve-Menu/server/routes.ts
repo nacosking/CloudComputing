@@ -28,23 +28,27 @@ export async function registerRoutes(
   // 1. GET MENU (For Customers & Admin)
   app.get('/api/menu', async (req, res) => {
     try {
-      // NEW WORKING CODE
+      // FIXED: Join with categories table to get the name (e.g., "Starters")
       const result = await pool.query(`
         SELECT m.*, c.name as category 
         FROM menu_items m 
         LEFT JOIN categories c ON m.category_id = c.id 
         ORDER BY m.id ASC
       `);
-      // Format for frontend tabs
+
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
+      
       result.rows.forEach(item => {
-        if (!menuData[item.category]) menuData[item.category] = [];
-        menuData[item.category].push(item);
+        // Normalize category name to lowercase so it matches your frontend tabs
+        const catName = item.category ? item.category.toLowerCase() : 'other';
+        
+        if (!menuData[catName]) menuData[catName] = [];
+        menuData[catName].push(item);
       });
+      
       res.json(menuData);
     } catch (err) {
       console.error("DB Error:", err);
-      // Fallback to empty if DB fails, so app doesn't crash
       res.json({ breakfast: [], lunch: [], dinner: [] });
     }
   });
