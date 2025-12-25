@@ -1,5 +1,5 @@
-import { AdminMenuManager } from "@/components/AdminMenuManager";
-import { Link, useLocation } from "wouter";
+import { AdminMenuManager as AdminMenuManage } from "@/components/AdminMenuManage";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
 
