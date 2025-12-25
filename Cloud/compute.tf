@@ -161,6 +161,7 @@ pm2 delete reserve-menu || true
 
 # Start application with ALL environment variables
 echo "Starting application with PM2..."
+NODE_TLS_REJECT_UNAUTHORIZED="0" \
 DATABASE_URL="postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=require" \
 S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}" \
 AWS_REGION="${var.aws_region}" \
