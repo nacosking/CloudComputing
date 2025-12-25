@@ -62,21 +62,18 @@ export async function registerRoutes(
 
   // 2. ADD ITEM (For Admin)
   // 2. ADD ITEM (For Admin)
+// 2. ADD ITEM (Corrected to use category_id via subquery)
   app.post('/api/menu', async (req, res) => {
     const { category, name, price, description } = req.body;
-    
     try {
-      // Dynamically find the ID from the categories table using the slug or name
-      // This removes the need for multiple 'if' statements
       const result = await pool.query(
         `INSERT INTO menu_items (category_id, name, price, description) 
-        VALUES (
-          (SELECT id FROM categories WHERE slug = $1 OR name = $1 LIMIT 1), 
-          $2, $3, $4
-        ) RETURNING *`,
+         VALUES (
+           (SELECT id FROM categories WHERE slug = $1 OR name = $1 LIMIT 1), 
+           $2, $3, $4
+         ) RETURNING *`,
         [category.toLowerCase(), name, price, description]
       );
-
       res.json(result.rows[0]);
     } catch (err) {
       console.error("DB Add Error:", err);
@@ -84,23 +81,20 @@ export async function registerRoutes(
     }
   });
 
-  // 3. UPDATE ITEM (For Admin) - NEW!
-  // 3. UPDATE ITEM (For Admin)
+  // 3. UPDATE ITEM (Corrected for category_id)
   app.put('/api/menu/:id', async (req, res) => {
     const { id } = req.params;
     const { name, price, description, category } = req.body;
-    
     try {
       const result = await pool.query(
         `UPDATE menu_items 
-        SET name = $1, 
-            price = $2, 
-            description = $3, 
-            category_id = (SELECT id FROM categories WHERE slug = $4 OR name = $4 LIMIT 1) 
-        WHERE id = $5 RETURNING *`,
+         SET name = $1, 
+             price = $2, 
+             description = $3, 
+             category_id = (SELECT id FROM categories WHERE slug = $4 OR name = $4 LIMIT 1) 
+         WHERE id = $5 RETURNING *`,
         [name, price, description, category.toLowerCase(), id]
       );
-
       if (result.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
       res.json(result.rows[0]);
     } catch (err) {
