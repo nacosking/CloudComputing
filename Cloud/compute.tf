@@ -122,7 +122,11 @@ resource "aws_launch_template" "main" {
         # 2. Clone Repository
         cd /home/ubuntu
         rm -rf app
-        git clone -b master https://github.com/nacosking/CloudComputing.git app
+        git clone -b cloud_features https://github.com/nacosking/CloudComputing.git app
+
+        # 3. Install Project Dependencies (Use the correct path and casing!)
+        # Note: Double check if your repo actually has two levels of "ReserveMenu"
+        cd /home/ubuntu/app/Reserve-Menu
 
         # 3. Install Project Dependencies
         cd /home/ubuntu/app/Reserve-Menu
