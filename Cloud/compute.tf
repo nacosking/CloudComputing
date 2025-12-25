@@ -77,7 +77,7 @@ resource "aws_launch_template" "main" {
 
               # 2. System Update & Tools
               apt-get update -y
-              apt-get install -y git curl
+              apt-get install -y git curl postgresql-client
 
               # 3. Install Node.js (Version 20 LTS)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -97,20 +97,21 @@ resource "aws_launch_template" "main" {
               cd app/Reserve-Menu
               echo "Installing dependencies..."
               npm install
-              
-              echo "Building frontend..."
-              npm run build
+              npm install @aws-sdk/client-s3 qrcode
 
               # 7. Configure Environment Variables
               # Terraform fills in these values automatically
-              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
+              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}?sslmode=require"
+              export S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
+              export AWS_REGION="${var.aws_region}"
               export PORT=5000
               export NODE_ENV=production
+              
 
               # 8. Start Application with PM2
               echo "Starting server..."
-              # --update-env ensures the DATABASE_URL is locked into the process
-              pm2 start npm --name "reserve-menu" --update-env -- run start
+              npm run build
+              pm2 start dist/index.cjs --name "reserve-menu" --update-env
               
               # 9. Save Process List & Generate Startup Script
               # This ensures the app restarts automatically if the server reboots
