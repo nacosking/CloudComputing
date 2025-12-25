@@ -25,6 +25,7 @@ const formSchema = z.object({
 
 export function BookingForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [, navigate] = useLocation();
   const { user, addReservation } = useAuth();
 
@@ -37,15 +38,19 @@ export function BookingForm() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    // Prevent double submission
+    if (isSubmitting) return;
+
     if (!user) {
       navigate("/login");
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
       const dateStr = format(values.date, "yyyy-MM-dd");
 
-      // 1. AWAIT the result so lastReservation is set in the context
       await addReservation({
         name: values.name,
         email: values.email,
@@ -54,16 +59,16 @@ export function BookingForm() {
         guests: parseInt(values.guests),
       });
 
-      // 2. Only show success after the DB has confirmed (201 Created)
       setIsSubmitted(true);
 
-      // 3. Move to payment page after the animation
       setTimeout(() => {
         navigate("/payment");
       }, 2000);
     } catch (error) {
       console.error("Reservation failed:", error);
-      // Add a toast or alert here if you want to show the error
+      setIsSubmitting(false);
+      // Optionally show error to user
+      alert("Failed to create reservation. Please try again.");
     }
   }
 
@@ -121,6 +126,7 @@ export function BookingForm() {
                       <Input
                         placeholder="John Doe"
                         {...field}
+                        disabled={isSubmitting}
                         className="bg-background/80 border-primary/20 focus:border-primary/50 focus:ring-primary/20 rounded-lg h-11 placeholder:text-foreground/40"
                       />
                     </FormControl>
@@ -141,6 +147,7 @@ export function BookingForm() {
                       <Input
                         placeholder="john@example.com"
                         {...field}
+                        disabled={isSubmitting}
                         className="bg-background/80 border-primary/20 focus:border-primary/50 focus:ring-primary/20 rounded-lg h-11 placeholder:text-foreground/40"
                       />
                     </FormControl>
@@ -174,7 +181,9 @@ export function BookingForm() {
                             whileTap={{ scale: 0.98 }}
                           >
                             <Button
+                              type="button"
                               variant={"outline"}
+                              disabled={isSubmitting}
                               className={cn(
                                 "pl-4 pr-3 text-left font-normal rounded-lg h-12 transition-all",
                                 "bg-gradient-to-r from-background/80 to-primary/5",
@@ -236,7 +245,7 @@ export function BookingForm() {
                       <Clock className="w-4 h-4 text-primary" />
                       Time
                     </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                       <FormControl>
                         <SelectTrigger className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11">
                           <SelectValue placeholder="Select time" />
@@ -268,7 +277,7 @@ export function BookingForm() {
                       <Users className="w-4 h-4 text-primary" />
                       Guests
                     </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                       <FormControl>
                         <SelectTrigger className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11">
                           <SelectValue placeholder="Party size" />
@@ -291,14 +300,26 @@ export function BookingForm() {
 
             {/* Submit Button */}
             <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
+              whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
             >
               <Button
                 type="submit"
-                className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground rounded-lg shadow-lg hover:shadow-xl transition-all"
+                disabled={isSubmitting}
+                className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {user ? "Confirm Reservation" : "Sign In to Book"}
+                {isSubmitting ? (
+                  <motion.span
+                    animate={{ opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  >
+                    Processing...
+                  </motion.span>
+                ) : user ? (
+                  "Confirm Reservation"
+                ) : (
+                  "Sign In to Book"
+                )}
               </Button>
             </motion.div>
 
