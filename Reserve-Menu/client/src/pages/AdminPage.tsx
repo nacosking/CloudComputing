@@ -1,8 +1,17 @@
 import { AdminMenuManager } from "@/components/AdminMenuManager";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function AdminPage() {
+    const [, navigate] = useLocation();
+    const { logout } = useAuth();
+
+    const handleLogout = () => {
+        logout();
+        navigate("/");
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Admin Header */}
@@ -18,11 +27,14 @@ export default function AdminPage() {
                     <Link href="/">
                         <Button variant="outline" size="sm">View Site</Button>
                     </Link>
-                    <Link href="/auth">
-                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50">
-                            Log Out
-                        </Button>
-                    </Link>
+                    <Button 
+                        onClick={handleLogout}
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                        Log Out
+                    </Button>
                 </div>
             </header>
 
