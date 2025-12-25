@@ -69,48 +69,55 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              # 1. Logging Setup for debugging 
+              
+              # 1. Logging Setup (Crucial for debugging)
+              # This saves all output to /var/log/user-data.log so you can read it later
               exec > >(tee /var/log/user-data.log) 2>&1
-              echo "Starting fully automatic deployment..."
+              echo "Starting deployment..."
 
-              # 2. Install System Tools and Node.js [cite: 12, 13]
+              # 2. System Update & Tools
               apt-get update -y
-              apt-get install -y git curl postgresql-client
+              apt-get install -y git curl
+
+              # 3. Install Node.js (Version 20 LTS)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
 
-              # 3. Setup PM2 for process management [cite: 14]
+              # 4. Install PM2 & Configure Global Path
+              # We set PM2_HOME explicitly so it works for Root and System restarts
               npm install -g pm2
               export PM2_HOME=/etc/.pm2
 
-              # 4. Clone your specific 'new_cloud' branch [cite: 14]
+              # 5. Clone Repository
               cd /home/ubuntu
+              # Cloning the specific branch 'new_cloud'
               git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
-              cd app/Reserve-Menu
 
-              # 5. Install standard and specific packages (S3 & QR Code)
+              # 6. Install & Build Application
+              cd app/Reserve-Menu
               echo "Installing dependencies..."
               npm install
-              npm install @aws-sdk/client-s3 qrcode
+              
+              echo "Building frontend..."
+              npm run build
 
-              # 6. Set Environment Variables (Automatic injection) [cite: 16]
-              # These are pulled directly from your Terraform resources
-              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}?sslmode=require"
-              export S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
-              export AWS_REGION="${var.aws_region}"
+              # 7. Configure Environment Variables
+              # Terraform fills in these values automatically
+              export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
               export PORT=5000
               export NODE_ENV=production
 
-              # 7. Build and Start the Application [cite: 15, 17]
-              echo "Building and starting application..."
-              npm run build
-              pm2 start dist/index.cjs --name "reserve-menu" --update-env
+              # 8. Start Application with PM2
+              echo "Starting server..."
+              # --update-env ensures the DATABASE_URL is locked into the process
+              pm2 start npm --name "reserve-menu" -- run start
               
-              # 8. Ensure auto-restart on server reboot [cite: 18]
+              # 9. Save Process List & Generate Startup Script
+              # This ensures the app restarts automatically if the server reboots
               pm2 save
               pm2 startup systemd -u root --hp /etc/.pm2
 
-              echo "Automatic deployment complete."
+              echo "Deployment complete."
               EOF
   )
   update_default_version = true
