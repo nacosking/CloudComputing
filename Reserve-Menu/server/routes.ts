@@ -9,7 +9,10 @@ import { Pool } from "pg";
 
 // 1. Setup Database Connection for the NEW Dynamic Menu
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgres://dbadmin:SecurePass2025@cloud-project-db.cu8gzw5dvnqx.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=require",
+  connectionString: process.env.DATABASE_URL || "",
+  ssl: {
+    rejectUnauthorized: false // This tells Node to accept the RDS self-signed cert
+  }
 });
 
 export async function registerRoutes(
