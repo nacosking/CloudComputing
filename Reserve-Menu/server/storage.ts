@@ -59,7 +59,8 @@ export class DatabaseStorage implements IStorage {
       const qrBuffer = await QRCode.toBuffer(qrData);
 
       // 3. Upload to S3
-      const fileName = `reservations/${reservation.id}/qr.png`;
+      // Inside DatabaseStorage class -> createReservation method
+      const fileName = `reservations/${reservation.id}/qr_${Date.now()}_${Math.floor(Math.random() * 1000)}.png`;
       await s3Client.send(new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: fileName,
