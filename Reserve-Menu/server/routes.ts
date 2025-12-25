@@ -69,7 +69,7 @@ export async function registerRoutes(
       const result = await pool.query(
         `INSERT INTO menu_items (category_id, name, price, description) 
          VALUES (
-           (SELECT id FROM categories WHERE slug = $1 OR name = $1 LIMIT 1), 
+           (SELECT id FROM categories_id WHERE slug = $1 OR name = $1 LIMIT 1), 
            $2, $3, $4
          ) RETURNING *`,
         [category.toLowerCase(), name, price, description]
@@ -91,7 +91,7 @@ export async function registerRoutes(
          SET name = $1, 
              price = $2, 
              description = $3, 
-             category_id = (SELECT id FROM categories WHERE slug = $4 OR name = $4 LIMIT 1) 
+             category_id = (SELECT id FROM categories_id WHERE slug = $4 OR name = $4 LIMIT 1) 
          WHERE id = $5 RETURNING *`,
         [name, price, description, category.toLowerCase(), id]
       );
