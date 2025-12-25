@@ -9,10 +9,8 @@ import { Pool } from "pg";
 
 // 1. Setup Database Connection for the NEW Dynamic Menu
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "",
+  connectionString: process.env.DATABASE_URL || "postgres://dbadmin:SecurePass2025@cloud-project-db.cu8gzw5dvnqx.us-east-1.rds.amazonaws.com:5432/appdb?sslmode=require",
 });
-
-
 
 export async function registerRoutes(
   httpServer: Server,
@@ -28,27 +26,17 @@ export async function registerRoutes(
   // 1. GET MENU (For Customers & Admin)
   app.get('/api/menu', async (req, res) => {
     try {
-      // FIXED: Join with categories table to get the name (e.g., "Starters")
-      const result = await pool.query(`
-        SELECT m.*, c.name as category 
-        FROM menu_items m 
-        LEFT JOIN categories c ON m.category_id = c.id 
-        ORDER BY m.id ASC
-      `);
-
+      const result = await pool.query('SELECT * FROM menu_items ORDER BY id ASC');
+      // Format for frontend tabs
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
-      
       result.rows.forEach(item => {
-        // Normalize category name to lowercase so it matches your frontend tabs
-        const catName = item.category ? item.category.toLowerCase() : 'other';
-        
-        if (!menuData[catName]) menuData[catName] = [];
-        menuData[catName].push(item);
+        if (!menuData[item.category]) menuData[item.category] = [];
+        menuData[item.category].push(item);
       });
-      
       res.json(menuData);
     } catch (err) {
       console.error("DB Error:", err);
+      // Fallback to empty if DB fails, so app doesn't crash
       res.json({ breakfast: [], lunch: [], dinner: [] });
     }
   });
