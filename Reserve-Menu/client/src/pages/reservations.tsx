@@ -45,9 +45,11 @@ export default function ReservationsPage() {
             <p className="text-foreground/60">Welcome, <span className="font-semibold">{user.name}</span></p>
           </div>
           <div className="flex gap-4">
-            <Button asChild variant="outline" className="border-background/30 text-background hover:bg-background hover:text-foreground">
-              <a href="/">Home</a>
-            </Button>
+            <Link href="/">
+              <Button variant="outline" className="border-background/30 text-background hover:bg-background hover:text-foreground">
+                Home
+              </Button>
+            </Link>
             <Button
               onClick={handleLogout}
               variant="ghost"
@@ -78,7 +80,7 @@ export default function ReservationsPage() {
               You haven't made any reservations yet. Book a table at Lumière to get started.
             </p>
             <Button asChild className="rounded-full px-8">
-              <a href="/#book">Book a Table</a>
+              <Link href="/#book">Book a Table</Link>
             </Button>
           </motion.div>
         ) : (
