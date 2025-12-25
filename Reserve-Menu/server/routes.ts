@@ -64,9 +64,20 @@ export async function registerRoutes(
   app.post('/api/menu', async (req, res) => {
     const { category, name, price, description } = req.body;
     try {
+      // 1. DYNAMICALLY find the ID so you don't have to hardcode "if cat === 1"
+      const catResult = await pool.query('SELECT id FROM categories WHERE slug = $1 OR name = $2', 
+        [category.toLowerCase(), category]);
+      
+      if (catResult.rows.length === 0) {
+        return res.status(400).json({ error: 'Invalid category name' });
+      }
+
+      const category_id = catResult.rows[0].id;
+
+      // 2. INSERT using the real column name: category_id
       const result = await pool.query(
-        'INSERT INTO menu_items (category, name, price, description) VALUES ($1, $2, $3, $4) RETURNING *',
-        [category, name, price, description]
+        'INSERT INTO menu_items (category_id, name, price, description) VALUES ($1, $2, $3, $4) RETURNING *',
+        [category_id, name, price, description]
       );
       res.json(result.rows[0]);
     } catch (err) {
@@ -80,10 +91,15 @@ export async function registerRoutes(
     const { id } = req.params;
     const { name, price, description, category } = req.body;
     try {
+      // Get the ID dynamically
+      const catResult = await pool.query('SELECT id FROM categories WHERE slug = $1', [category.toLowerCase()]);
+      const category_id = catResult.rows[0]?.id || 1;
+
       const result = await pool.query(
-        'UPDATE menu_items SET name = $1, price = $2, description = $3, category = $4 WHERE id = $5 RETURNING *',
-        [name, price, description, category, id]
+        'UPDATE menu_items SET name = $1, price = $2, description = $3, category_id = $4 WHERE id = $5 RETURNING *',
+        [name, price, description, category_id, id]
       );
+      
       if (result.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
       res.json(result.rows[0]);
     } catch (err) {
