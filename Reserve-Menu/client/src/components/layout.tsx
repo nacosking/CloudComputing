@@ -1,4 +1,3 @@
-import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -26,6 +25,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   };
 
+  const handleNavigation = (path: string) => {
+    window.scrollTo(0, 0);
+    navigate(path);
+    setMobileMenuOpen(false);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground font-sans">
       <header
@@ -37,14 +42,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className="container mx-auto px-4 flex justify-between items-center">
-          <Link href="/">
-            <a className={cn(
+          <button 
+            onClick={() => handleNavigation("/")}
+            className={cn(
               "font-serif text-2xl md:text-3xl font-bold tracking-tight",
               isScrolled ? "text-foreground" : "text-white"
-            )}>
-              Lumière<span className="text-primary">.</span>
-            </a>
-          </Link>
+            )}
+          >
+            Lumière<span className="text-primary">.</span>
+          </button>
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-8">
@@ -62,10 +68,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
             ))}
             {user ? (
               <>
-                <Button asChild variant="outline" className="rounded-full px-6 border-white/30">
-                  <Link href="/reservations">
-                    <a>My Reservations</a>
-                  </Link>
+                <Button 
+                  onClick={() => handleNavigation("/reservations")}
+                  variant="outline" 
+                  className="rounded-full px-6 border-white/30"
+                >
+                  My Reservations
                 </Button>
                 <Button 
                   onClick={handleLogout}
@@ -77,13 +85,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </>
             ) : (
               <>
-                <Button asChild variant="outline" className="rounded-full px-6 border-white/30">
-                  <Link href="/login">
-                    <a>Sign In</a>
-                  </Link>
+                <Button 
+                  onClick={() => handleNavigation("/login")}
+                  variant="outline" 
+                  className="rounded-full px-6 border-white/30"
+                >
+                  Sign In
                 </Button>
-                <Button asChild className="rounded-full px-6">
-                  <a href="#book">Book a Table</a>
+                <Button 
+                  onClick={() => {
+                    const bookSection = document.getElementById('book');
+                    if (bookSection) {
+                      bookSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
+                  className="rounded-full px-6"
+                >
+                  Book a Table
                 </Button>
               </>
             )}
@@ -107,10 +125,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <a href="#location" className="text-lg font-medium p-2 hover:bg-muted rounded-md" onClick={() => setMobileMenuOpen(false)}>Location</a>
             {user ? (
               <>
-                <Button asChild className="w-full rounded-full" onClick={() => setMobileMenuOpen(false)}>
-                  <Link href="/reservations">
-                    <a>My Reservations</a>
-                  </Link>
+                <Button 
+                  onClick={() => handleNavigation("/reservations")}
+                  className="w-full rounded-full"
+                >
+                  My Reservations
                 </Button>
                 <Button 
                   onClick={handleLogout}
@@ -122,13 +141,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </>
             ) : (
               <>
-                <Button asChild variant="outline" className="w-full rounded-full" onClick={() => setMobileMenuOpen(false)}>
-                  <Link href="/login">
-                    <a>Sign In</a>
-                  </Link>
+                <Button 
+                  onClick={() => handleNavigation("/login")}
+                  variant="outline" 
+                  className="w-full rounded-full"
+                >
+                  Sign In
                 </Button>
-                <Button asChild className="w-full rounded-full" onClick={() => setMobileMenuOpen(false)}>
-                  <a href="#book">Book a Table</a>
+                <Button 
+                  onClick={() => {
+                    const bookSection = document.getElementById('book');
+                    if (bookSection) {
+                      bookSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full rounded-full"
+                >
+                  Book a Table
                 </Button>
               </>
             )}

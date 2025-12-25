@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/auth-context";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Link } from "wouter";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -32,7 +31,6 @@ export default function LoginPage() {
     try {
       await login(values.email, values.password);
 
-      // --- NEW LOGIC START ---
       // Check if the user is an admin based on email
       if (values.email.toLowerCase() === "admin@lumiere.com") {
         navigate("/admin");
@@ -40,8 +38,6 @@ export default function LoginPage() {
         // Regular customers go to reservations
         navigate("/reservations");
       }
-      // --- NEW LOGIC END ---
-
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -58,11 +54,12 @@ export default function LoginPage() {
         className="w-full max-w-md"
       >
         <div className="text-center mb-12">
-          <Link href="/">
-            <a className="inline-block font-serif text-3xl font-bold tracking-tight text-foreground mb-8">
-              Lumière<span className="text-primary">.</span>
-            </a>
-          </Link>
+          <button 
+            onClick={() => navigate("/")}
+            className="inline-block font-serif text-3xl font-bold tracking-tight text-foreground mb-8 hover:text-primary transition-colors"
+          >
+            Lumière<span className="text-primary">.</span>
+          </button>
           <h1 className="font-serif text-3xl font-bold mb-2">Welcome Back</h1>
           <p className="text-muted-foreground">Sign in to view and manage your reservations</p>
         </div>
@@ -134,11 +131,12 @@ export default function LoginPage() {
             <p className="text-muted-foreground text-sm mb-4">
               New to Lumière? Demo: use any email and password
             </p>
-            <Link href="/">
-              <a className="text-primary hover:text-primary/80 font-medium text-sm">
-                Back to Home
-              </a>
-            </Link>
+            <button 
+              onClick={() => navigate("/")}
+              className="text-primary hover:text-primary/80 font-medium text-sm"
+            >
+              Back to Home
+            </button>
           </div>
         </div>
       </motion.div>
