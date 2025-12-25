@@ -69,56 +69,48 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              
-              # 1. Logging Setup (Crucial for debugging)
-              # This saves all output to /var/log/user-data.log so you can read it later
+              # 1. Logging Setup for debugging 
               exec > >(tee /var/log/user-data.log) 2>&1
-              echo "Starting deployment..."
+              echo "Starting fully automatic deployment..."
 
-              # 2. System Update & Tools
+              # 2. Install System Tools and Node.js [cite: 12, 13]
               apt-get update -y
               apt-get install -y git curl postgresql-client
-
-              # 3. Install Node.js (Version 20 LTS)
               curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
               apt-get install -y nodejs
 
-              # 4. Install PM2 & Configure Global Path
-              # We set PM2_HOME explicitly so it works for Root and System restarts
+              # 3. Setup PM2 for process management [cite: 14]
               npm install -g pm2
               export PM2_HOME=/etc/.pm2
 
-              # 5. Clone Repository
+              # 4. Clone your specific 'new_cloud' branch [cite: 14]
               cd /home/ubuntu
-              # Cloning the specific branch 'new_cloud'
               git clone -b new_cloud https://github.com/nacosking/CloudComputing.git app
-
-              # 6. Install & Build Application
               cd app/Reserve-Menu
+
+              # 5. Install standard and specific packages (S3 & QR Code)
               echo "Installing dependencies..."
               npm install
               npm install @aws-sdk/client-s3 qrcode
 
-              # 7. Configure Environment Variables
-              # Terraform fills in these values automatically
+              # 6. Set Environment Variables (Automatic injection) [cite: 16]
+              # These are pulled directly from your Terraform resources
               export DATABASE_URL="postgres://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}?sslmode=require"
               export S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
               export AWS_REGION="${var.aws_region}"
               export PORT=5000
               export NODE_ENV=production
-              
 
-              # 8. Start Application with PM2
-              echo "Starting server..."
+              # 7. Build and Start the Application [cite: 15, 17]
+              echo "Building and starting application..."
               npm run build
               pm2 start dist/index.cjs --name "reserve-menu" --update-env
               
-              # 9. Save Process List & Generate Startup Script
-              # This ensures the app restarts automatically if the server reboots
+              # 8. Ensure auto-restart on server reboot [cite: 18]
               pm2 save
               pm2 startup systemd -u root --hp /etc/.pm2
 
-              echo "Deployment complete."
+              echo "Automatic deployment complete."
               EOF
   )
   update_default_version = true
