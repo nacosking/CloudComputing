@@ -63,13 +63,14 @@ export async function registerRoutes(
   // 2. ADD ITEM (For Admin)
   // 2. ADD ITEM (For Admin)
 // 2. ADD ITEM (Corrected to use category_id via subquery)
+  // 2. ADD ITEM (Fixed: Uses category_id and a subquery)
   app.post('/api/menu', async (req, res) => {
     const { category, name, price, description } = req.body;
     try {
       const result = await pool.query(
         `INSERT INTO menu_items (category_id, name, price, description) 
          VALUES (
-           (SELECT id FROM categories_id WHERE slug = $1 OR name = $1 LIMIT 1), 
+           (SELECT id FROM categories WHERE slug = $1 OR name = $1 LIMIT 1), 
            $2, $3, $4
          ) RETURNING *`,
         [category.toLowerCase(), name, price, description]
@@ -81,7 +82,7 @@ export async function registerRoutes(
     }
   });
 
-  // 3. UPDATE ITEM (Corrected for category_id)
+  // 3. UPDATE ITEM (Fixed: Uses category_id and a subquery)
   app.put('/api/menu/:id', async (req, res) => {
     const { id } = req.params;
     const { name, price, description, category } = req.body;
@@ -91,7 +92,7 @@ export async function registerRoutes(
          SET name = $1, 
              price = $2, 
              description = $3, 
-             category_id = (SELECT id FROM categories_id WHERE slug = $4 OR name = $4 LIMIT 1) 
+             category_id = (SELECT id FROM categories WHERE slug = $4 OR name = $4 LIMIT 1) 
          WHERE id = $5 RETURNING *`,
         [name, price, description, category.toLowerCase(), id]
       );
