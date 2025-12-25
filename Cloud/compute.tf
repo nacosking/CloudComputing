@@ -17,10 +17,7 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# --- CRITICAL FIX: IAM Instance Profile Data Source ---
-data "aws_iam_instance_profile" "lab_profile" {
-  name = "LabInstanceProfile"
-}
+# Note: IAM Instance Profile data source is defined in security.tf
 
 # ---------------------------------------------------------
 # APPLICATION LOAD BALANCER
