@@ -18,7 +18,6 @@ const MemoryStore = createMemoryStore(session);
 const s3Client = new S3Client({ region: "us-east-1" });
 const BUCKET_NAME = "customer-reservations-qr-759145289015";
 
-
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
