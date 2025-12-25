@@ -133,7 +133,7 @@ su - ubuntu -c '
     cd /home/ubuntu
     rm -rf app
     # CHANGED: "master" to "main" (common cause of failure)
-    git clone -b main https://github.com/nacosking/CloudComputing.git app
+    git clone -b master https://github.com/nacosking/CloudComputing.git app
     
     # 3. Install Project Dependencies
     cd /home/ubuntu/app/Reserve-Menu
