@@ -24,9 +24,16 @@ export default function AdminPage() {
                 </div>
 
                 <div className="flex gap-4">
-                    <Link href="/">
-                        <Button variant="outline" size="sm">View Site</Button>
-                    </Link>
+                    <Button 
+                        onClick={() => {
+                            window.scrollTo(0, 0);
+                            navigate("/");
+                        }}
+                        variant="outline" 
+                        size="sm"
+                    >
+                        View Site
+                    </Button>
                     <Button 
                         onClick={handleLogout}
                         variant="ghost" 
