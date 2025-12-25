@@ -94,7 +94,6 @@ resource "aws_launch_template" "main" {
     delete_on_termination       = true
   }
 
-  # FIXED: Proper HEREDOC syntax without leading spaces
   user_data = base64encode(<<-EOF
 #!/bin/bash
 set -e
@@ -145,42 +144,49 @@ git clone -b master https://github.com/nacosking/CloudComputing.git app
 # Navigate to application directory
 cd /home/ubuntu/app/Reserve-Menu
 
+# Fix case-sensitive filename issue (if exists)
+if [ -f "client/src/components/adminMenuManager.tsx" ]; then
+    mv client/src/components/adminMenuManager.tsx client/src/components/AdminMenuManager.tsx
+fi
+
 # Install dependencies
 echo "Installing npm packages..."
-npm ci --production=false
-
-# Install additional packages
+npm install
 npm install @aws-sdk/client-s3 qrcode
-
-# Create .env file
-echo "Creating .env file..."
-cat > .env << 'ENVEOF'
-DATABASE_URL=postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=no-verify
-S3_BUCKET_NAME=${aws_s3_bucket.app_storage.id}
-AWS_REGION=${var.aws_region}
-PORT=5000
-NODE_ENV=production
-ENVEOF
 
 # Build application
 echo "Building application..."
+rm -rf dist
 npm run build
 
 # Stop existing PM2 processes
-pm2 delete all || true
+pm2 delete reserve-menu || true
 
-# Start application with PM2
-echo "Starting application..."
+# Start application with ALL environment variables
+echo "Starting application with PM2..."
+NODE_TLS_REJECT_UNAUTHORIZED="0" \
+DATABASE_URL="postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=require" \
+S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}" \
+AWS_REGION="${var.aws_region}" \
+PORT=5000 \
+NODE_ENV=production \
 pm2 start dist/index.cjs --name reserve-menu
-pm2 save
+
+# Save PM2 configuration
+pm2 save --force
 
 echo "Application started successfully!"
 USEREOF
 
-# Configure PM2 startup
+# Configure PM2 to start on system boot
 env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
 systemctl enable pm2-ubuntu
 systemctl start pm2-ubuntu
+
+# Verify application is running
+sleep 10
+su - ubuntu -c 'pm2 list'
+su - ubuntu -c 'pm2 logs reserve-menu --lines 50 --nostream'
 
 echo "=== Deployment complete at $(date) ==="
 EOF
