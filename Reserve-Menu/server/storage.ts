@@ -16,8 +16,8 @@ const MemoryStore = createMemoryStore(session);
 
 // AWS S3 Configuration - Using LabRole (no credentials needed)
 const s3Client = new S3Client({ region: "us-east-1" });
-//const BUCKET_NAME = "customer-reservations-qr-759145289015";
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || "";
+const BUCKET_NAME = "customer-reservations-qr-759145289015";
+
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;

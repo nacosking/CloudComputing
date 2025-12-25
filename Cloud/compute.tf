@@ -70,97 +70,65 @@ resource "aws_lb_listener" "http" {
 # ---------------------------------------------------------
 # LAUNCH TEMPLATE (Mandatory Requirement)
 # ---------------------------------------------------------
+
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
+
+  # Now this will work because the data source is defined above
   image_id      = data.aws_ami.ubuntu.id
+
   instance_type = var.instance_type
 
-  # 1. IAM Permissions (S3 & CloudWatch Access)
+  # Attach IAM instance profile for S3 and CloudWatch access
+  # Uses the data source defined in security.tf
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
 
-  # 2. Network Configuration (Security Groups & Public IP)
   network_interfaces {
     associate_public_ip_address = true
     security_groups             = [aws_security_group.web.id]
   }
 
-  # 3. User Data Script (Runs on first boot)
   user_data = base64encode(<<-EOF
-    #!/bin/bash
+              #!/bin/bash
+              set -e
+              exec > >(tee /var/log/user-data.log) 2>&1
 
-    # --- A. LOGGING SETUP ---
-    exec > >(tee /var/log/user-data.log) 2>&1
-    echo "Starting deployment..."
+              # 1. Update & Install Tools
+              apt-get update -y
+              apt-get install -y git curl build-essential postgresql-client
 
-    # --- B. PRE-INSTALLATION CHECKS ---
-    while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
-        echo "Waiting for other software managers to finish..."
-        sleep 1
-    done
+              # 2. Install Node.js 20
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              apt-get install -y nodejs
+              npm install -g pm2
 
-    # --- C. SYSTEM DEPENDENCIES ---
-    apt-get update -y
-    apt-get install -y git curl postgresql-client
+              # 3. Clone the CORRECT branch
+              cd /home/ubuntu
+              git clone -b cloud_features https://github.com/nacosking/CloudComputing.git app
+              chown -R ubuntu:ubuntu app
 
-    # Install Node.js 20 (LTS)
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
+              # 4. Install Dependencies
+              cd app/ReserveMenu/ReserveMenu
+              npm install
+              npm run build
 
-    # --- D. DIRECTORY SETUP ---
-    mkdir -p /home/ubuntu/app
-    chown -R ubuntu:ubuntu /home/ubuntu/app
+              # 5. Start App with Database Connection
+              export PORT=5000
+              export NODE_ENV=production
 
-    # --- E. APPLICATION DEPLOYMENT (Run as 'ubuntu' user) ---
-    su - ubuntu -c '
-        echo "Running setup as user: $(whoami)"
+              # IMPORTANT: This injects the RDS details so the app can connect
+              # Ensure 'aws_db_instance.main' matches your database.tf resource name
+              export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
 
-        # 1. Install PM2 globally
-        sudo npm install -g pm2
-
-        # 2. Clone Repository
-        cd /home/ubuntu
-        rm -rf app
-        git clone -b cloud_features https://github.com/nacosking/CloudComputing.git app
-
-        # 3. Install Project Dependencies (Use the correct path and casing!)
-        # Note: Double check if your repo actually has two levels of "ReserveMenu"
-        cd /home/ubuntu/app/Reserve-Menu
-
-        # 3. Install Project Dependencies
-        cd /home/ubuntu/app/Reserve-Menu
-        echo "Installing npm packages..."
-        npm install
-        npm install @aws-sdk/client-s3 qrcode
-
-        # 4. Generate .env File (FIXED: Uses <<-EOT to strip spaces)
-        echo "Creating .env file..."
-        cat <<-EOT > .env
-DATABASE_URL="postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=no-verify"
-S3_BUCKET_NAME="${aws_s3_bucket.app_storage.id}"
-AWS_REGION="${var.aws_region}"
-PORT=5000
-NODE_ENV=production
-EOT
-
-        # 5. Build and Start Application
-        echo "Building application..."
-        npm run build
-
-        echo "Starting PM2..."
-        pm2 start dist/index.cjs --name "reserve-menu"
-        pm2 save
-    '
-
-    # --- F. FINAL SYSTEM CONFIGURATION ---
-    env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
-    systemctl start pm2-ubuntu
-
-    echo "Deployment complete!"
-  EOF
+              pm2 start npm --name "reserve-menu" -- start
+              pm2 save
+              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+              EOF
   )
 }
+
 # ---------------------------------------------------------
 # AUTO SCALING GROUP (Mandatory Requirement)
 # ---------------------------------------------------------
