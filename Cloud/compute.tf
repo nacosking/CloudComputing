@@ -102,7 +102,7 @@ resource "aws_launch_template" "main" {
     mkdir -p /home/ubuntu/app
     
     # Clone into temp and move to ensure permissions are clean later
-    git clone -b master https://github.com/nacosking/CloudComputing.git /home/ubuntu/repo_temp
+    git clone -b newtesting https://github.com/nacosking/CloudComputing.git /home/ubuntu/repo_temp
     mv /home/ubuntu/repo_temp/* /home/ubuntu/app/
     rm -rf /home/ubuntu/repo_temp
 
