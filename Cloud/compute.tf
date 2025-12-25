@@ -2,7 +2,6 @@
 # COMPUTE: ALB, LAUNCH TEMPLATE, ASG
 # ---------------------------------------------------------
 
-# --- FIXED: Added Data Source Here to Fix "Undeclared Resource" Error ---
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
@@ -18,12 +17,14 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# Create Application Load Balancer
+# ---------------------------------------------------------
+# APPLICATION LOAD BALANCER
+# ---------------------------------------------------------
+
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
   internal           = false
   load_balancer_type = "application"
-  # References security group defined in security.tf
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
@@ -34,7 +35,6 @@ resource "aws_lb" "main" {
   }
 }
 
-# Create Target Group (Routes traffic to EC2 instances)
 resource "aws_lb_target_group" "main" {
   name     = "${var.project_name}-tg"
   port     = 5000
@@ -52,6 +52,8 @@ resource "aws_lb_target_group" "main" {
     interval            = 30
   }
 
+  deregistration_delay = 30
+
   tags = {
     Name = "${var.project_name}-target-group"
   }
@@ -61,6 +63,7 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
+  
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
@@ -68,19 +71,14 @@ resource "aws_lb_listener" "http" {
 }
 
 # ---------------------------------------------------------
-# LAUNCH TEMPLATE (Mandatory Requirement)
+# LAUNCH TEMPLATE
 # ---------------------------------------------------------
 
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-"
-
-  # Now this will work because the data source is defined above
   image_id      = data.aws_ami.ubuntu.id
-
   instance_type = var.instance_type
 
-  # Attach IAM instance profile for S3 and CloudWatch access
-  # Uses the data source defined in security.tf
   iam_instance_profile {
     name = data.aws_iam_instance_profile.lab_profile.name
   }
@@ -88,73 +86,145 @@ resource "aws_launch_template" "main" {
   network_interfaces {
     associate_public_ip_address = true
     security_groups             = [aws_security_group.web.id]
+    delete_on_termination       = true
   }
 
+  # FIXED: Proper HEREDOC syntax without leading spaces
   user_data = base64encode(<<-EOF
-              #!/bin/bash
-              set -e
-              exec > >(tee /var/log/user-data.log) 2>&1
+#!/bin/bash
+set -e
 
-              # 1. Update & Install Tools
-              apt-get update -y
-              apt-get install -y git curl build-essential postgresql-client
+# Logging setup
+exec > >(tee /var/log/user-data.log) 2>&1
+echo "=== Starting deployment at $(date) ==="
 
-              # 2. Install Node.js 20
-              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-              apt-get install -y nodejs
-              npm install -g pm2
+# Wait for system to be ready
+sleep 30
 
-              # 3. Clone the CORRECT branch
-              cd /home/ubuntu
-              git clone -b cloud_features https://github.com/nacosking/CloudComputing.git app
-              chown -R ubuntu:ubuntu app
+# Wait for package locks
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+    echo "Waiting for package manager locks..."
+    sleep 3
+done
 
-              # 4. Install Dependencies
-              cd app/ReserveMenu/ReserveMenu
-              npm install
-              npm run build
+# System updates and dependencies
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y git curl postgresql-client awscli
 
-              # 5. Start App with Database Connection
-              export PORT=5000
-              export NODE_ENV=production
+# Install Node.js 20 LTS
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
 
-              # IMPORTANT: This injects the RDS details so the app can connect
-              # Ensure 'aws_db_instance.main' matches your database.tf resource name
-              export DATABASE_URL="postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.address}:5432/${var.db_name}"
+# Verify installations
+echo "Node version: $(node --version)"
+echo "NPM version: $(npm --version)"
 
-              pm2 start npm --name "reserve-menu" -- start
-              pm2 save
-              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
-              EOF
+# Setup application directory
+mkdir -p /home/ubuntu/app
+chown -R ubuntu:ubuntu /home/ubuntu/app
+
+# Install PM2 globally
+npm install -g pm2
+
+# Deploy application as ubuntu user
+su - ubuntu << 'USEREOF'
+set -e
+cd /home/ubuntu
+
+# Clone repository
+echo "Cloning repository..."
+rm -rf app
+git clone -b master https://github.com/nacosking/CloudComputing.git app
+
+# Navigate to application directory
+cd /home/ubuntu/app/Reserve-Menu
+
+# Install dependencies
+echo "Installing npm packages..."
+npm ci --production=false
+
+# Install additional packages
+npm install @aws-sdk/client-s3 qrcode
+
+# Create .env file
+echo "Creating .env file..."
+cat > .env << 'ENVEOF'
+DATABASE_URL=postgresql://${var.db_username}:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}?sslmode=no-verify
+S3_BUCKET_NAME=${aws_s3_bucket.app_storage.id}
+AWS_REGION=${var.aws_region}
+PORT=5000
+NODE_ENV=production
+ENVEOF
+
+# Build application
+echo "Building application..."
+npm run build
+
+# Stop existing PM2 processes
+pm2 delete all || true
+
+# Start application with PM2
+echo "Starting application..."
+pm2 start dist/index.cjs --name reserve-menu
+pm2 save
+
+echo "Application started successfully!"
+USEREOF
+
+# Configure PM2 startup
+env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
+systemctl enable pm2-ubuntu
+systemctl start pm2-ubuntu
+
+echo "=== Deployment complete at $(date) ==="
+EOF
   )
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.project_name}-asg-instance"
+    }
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags = {
+      Name = "${var.project_name}-asg-volume"
+    }
+  }
 }
 
 # ---------------------------------------------------------
-# AUTO SCALING GROUP (Mandatory Requirement)
+# AUTO SCALING GROUP
 # ---------------------------------------------------------
 
 resource "aws_autoscaling_group" "main" {
   name                = "${var.project_name}-asg"
-
-  # FIXED: Switched to PUBLIC subnets to ensure Internet Access for git clone
   vpc_zone_identifier = aws_subnet.public[*].id
-
   target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
-  min_size            = var.min_size
-  max_size            = var.max_size
-  desired_capacity    = var.desired_capacity
+  
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+  
+  min_size         = var.min_size
+  max_size         = var.max_size
+  desired_capacity = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
 
-  # Instance refresh configuration (for zero-downtime updates)
+  # Wait for instances to pass health checks before continuing
+  wait_for_capacity_timeout = "10m"
+
   instance_refresh {
     strategy = "Rolling"
     preferences {
       min_healthy_percentage = 50
+      instance_warmup        = 300
     }
   }
 
@@ -166,13 +236,17 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "ManagedBy"
-    value               = "AutoScaling"
+    value               = "Terraform-ASG"
     propagate_at_launch = true
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
 # ---------------------------------------------------------
-# AUTO SCALING POLICIES (Mandatory Requirement)
+# AUTO SCALING POLICIES
 # ---------------------------------------------------------
 
 resource "aws_autoscaling_policy" "scale_up" {
@@ -181,6 +255,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = 1
   cooldown               = 300
+  policy_type            = "SimpleScaling"
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
@@ -189,4 +264,45 @@ resource "aws_autoscaling_policy" "scale_down" {
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = -1
   cooldown               = 300
+  policy_type            = "SimpleScaling"
+}
+
+# ---------------------------------------------------------
+# CLOUDWATCH ALARMS FOR AUTO SCALING
+# ---------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "${var.project_name}-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 70
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
+  }
+
+  alarm_description = "Triggers when CPU exceeds 70%"
+  alarm_actions     = [aws_autoscaling_policy.scale_up.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${var.project_name}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 30
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
+  }
+
+  alarm_description = "Triggers when CPU drops below 30%"
+  alarm_actions     = [aws_autoscaling_policy.scale_down.arn]
 }
