@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 import pastaImage from "@assets/generated_images/top-down_gourmet_pasta_dish.png";
 
-// FIXED: Changed 'desc' to 'description' to match your RDS Database column
 interface MenuItem {
   id: number;
   name: string;
@@ -19,18 +19,24 @@ interface MenuData {
 }
 
 export function MenuSection() {
+  const [location] = useLocation();
   const [menuItems, setMenuItems] = useState<MenuData>({ breakfast: [], lunch: [], dinner: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Fetch menu data whenever this component mounts OR when location changes
+    setLoading(true);
     fetch('/api/menu')
       .then(res => res.json())
       .then(data => {
         setMenuItems(data);
         setLoading(false);
       })
-      .catch(err => console.error("Failed to load menu:", err));
-  }, []);
+      .catch(err => {
+        console.error("Failed to load menu:", err);
+        setLoading(false);
+      });
+  }, [location]); // Added location as dependency
 
   if (loading) return <div className="text-center py-24">Loading seasonal menu...</div>;
 
@@ -98,7 +104,6 @@ export function MenuSection() {
                             <div className="flex-grow mx-4 border-b border-dotted border-muted-foreground/30 h-px" />
                             <span className="font-medium text-lg">{item.price}</span>
                           </div>
-                          {/* FIXED: Changed item.desc to item.description */}
                           <p className="text-muted-foreground text-sm font-light italic">{item.description}</p>
                         </div>
                       ))

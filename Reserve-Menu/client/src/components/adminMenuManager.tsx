@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Trash2, Edit, Plus, Save, X } from "lucide-react"; // Icons for UI
+import { useLocation } from "wouter";
+import { Trash2, Edit, Plus, Save, X } from "lucide-react";
 
 interface MenuItem {
     id: number;
@@ -10,25 +11,32 @@ interface MenuItem {
 }
 
 export function AdminMenuManager() {
+    const [location] = useLocation();
     const [items, setItems] = useState<MenuItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Form State
-    const [isEditing, setIsEditing] = useState<number | null>(null); // ID of item being edited
+    const [isEditing, setIsEditing] = useState<number | null>(null);
     const [formData, setFormData] = useState({ category: "dinner", name: "", price: "", description: "" });
 
     // 1. Fetch All Items on Load
     useEffect(() => {
         fetchMenu();
-    }, []);
+    }, [location]); // Added location as dependency
 
     const fetchMenu = async () => {
-        const res = await fetch('/api/menu');
-        const data = await res.json();
-        // Flatten the categories back into a single list for the table
-        const allItems = [...data.breakfast, ...data.lunch, ...data.dinner];
-        setItems(allItems);
-        setLoading(false);
+        setLoading(true);
+        try {
+            const res = await fetch('/api/menu');
+            const data = await res.json();
+            // Flatten the categories back into a single list for the table
+            const allItems = [...data.breakfast, ...data.lunch, ...data.dinner];
+            setItems(allItems);
+        } catch (err) {
+            console.error("Failed to load menu:", err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // 2. Handle DELETE
@@ -36,7 +44,7 @@ export function AdminMenuManager() {
         if (!confirm("Are you sure you want to delete this item?")) return;
 
         await fetch(`/api/menu/${id}`, { method: 'DELETE' });
-        setItems(items.filter(item => item.id !== id)); // Remove from UI instantly
+        setItems(items.filter(item => item.id !== id));
     };
 
     // 3. Handle ADD / UPDATE Submit
@@ -55,8 +63,8 @@ export function AdminMenuManager() {
         if (res.ok) {
             alert(isEditing ? "Item Updated!" : "Item Added!");
             setIsEditing(null);
-            setFormData({ category: "dinner", name: "", price: "", description: "" }); // Reset form
-            fetchMenu(); // Refresh list
+            setFormData({ category: "dinner", name: "", price: "", description: "" });
+            fetchMenu();
         }
     };
 
@@ -71,7 +79,7 @@ export function AdminMenuManager() {
         });
     };
 
-    if (loading) return <div>Loading Admin Panel...</div>;
+    if (loading) return <div className="text-center py-12">Loading Admin Panel...</div>;
 
     return (
         <div className="p-6 bg-white rounded-lg shadow-lg max-w-4xl mx-auto my-10">
