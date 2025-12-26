@@ -128,21 +128,34 @@ export async function registerRoutes(
   //   RESERVATION ROUTES
   // ============================================================
 
+  // TEMPORARY WORKAROUND: Update your POST /api/reservations route in routes.ts
+
   app.post("/api/reservations", async (req, res) => {
     try {
-      // 1. Parse the form data (Date, Time, Guests, Name...)
       const input = insertReservationSchema.parse(req.body);
 
-      // ✅ FIX: Check if user is logged in, then attach their ID
+      // ✅ TRY 1: Check if user is logged in via session
       if (req.isAuthenticated() && req.user) {
         const user = req.user as any;
-        // Force the userId into the input object
         (input as any).userId = user.id;
+        console.log("✅ User authenticated via session:", user.id);
+      }
+      // ✅ TRY 2: Fallback - lookup user by email
+      else if (input.email) {
+        try {
+          const user = await storage.getUserByEmail(input.email);
+          if (user) {
+            (input as any).userId = user.id;
+            console.log("✅ User found by email:", user.id);
+          } else {
+            console.log("⚠️ No user found for email:", input.email);
+          }
+        } catch (err) {
+          console.error("Error looking up user by email:", err);
+        }
       }
 
-      // 2. Create the reservation with the ID (or null if guest)
       const reservation = await storage.createReservation(input);
-
       res.status(201).json(reservation);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -158,25 +171,28 @@ export async function registerRoutes(
 
   // Add this route to your routes.ts file, in the RESERVATION ROUTES section
 
+  // GET user's reservations (requires authentication)
+  // Add this route to your routes.ts file, in the RESERVATION ROUTES section
+
 // GET user's reservations (requires authentication)
-app.get("/api/reservations", async (req, res) => {
-  try {
-    // Check if user is authenticated
-    if (!req.isAuthenticated() || !req.user) {
-      return res.status(401).json({ message: "Not authenticated" });
+  app.get("/api/reservations", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const user = req.user as any;
+
+      // Fetch reservations by email (or userId if you have that field)
+      const userReservations = await storage.getReservationsByEmail(user.email);
+
+      res.json(userReservations);
+    } catch (err) {
+      console.error("Fetch Reservations Error:", err);
+      res.status(500).json({ error: "Failed to fetch reservations" });
     }
-
-    const user = req.user as any;
-
-    // Fetch reservations by email (or userId if you have that field)
-    const userReservations = await storage.getReservationsByEmail(user.email);
-
-    res.json(userReservations);
-  } catch (err) {
-    console.error("Fetch Reservations Error:", err);
-    res.status(500).json({ error: "Failed to fetch reservations" });
-  }
-});
+  });
 
   // ============================================================
   //   DATABASE SEEDING
