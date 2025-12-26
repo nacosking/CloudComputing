@@ -10,7 +10,7 @@ interface MenuItem {
     id: number;
     category: string; // Storing as string like "breakfast"
     name: string;
-    price: number;    // Keeping as number for math, but form handles string conversion
+    price: number;    // Keeping as number for math, but form handles string conversionasd
     description: string;
 }
 
