@@ -42,7 +42,7 @@ interface AuthContextType {
   fetchReservations: () => Promise<void>;
   cancelReservation: (id: string) => void;
   // ✅ ADDED: Missing function definition
-  markReservationPaid: (id: number, qrData: string) => void;
+  markReservationPaid: (id: number, qrData: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
