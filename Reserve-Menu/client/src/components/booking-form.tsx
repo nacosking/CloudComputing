@@ -71,7 +71,6 @@ export function BookingForm() {
         date: dateStr,
         time: values.time,
         guests: parseInt(values.guests),
-        userId: user.id,
       });
 
       setIsSubmitted(true);

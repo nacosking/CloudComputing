@@ -137,28 +137,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function addReservation(reservationData: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">): Promise<Reservation> {
+    console.log("🎯 [AUTH-CONTEXT] Starting reservation submission");
+    console.log("📋 Data being sent:", reservationData);
+
     try {
-      // ✅ FIXED: Use credentials: "include" to send session cookie
       const response = await fetch("/api/reservations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
+        credentials: "include", // ✅ KEEPS THE SESSION ALIVE
         body: JSON.stringify(reservationData),
       });
 
+      console.log("📡 Response status:", response.status);
+
       if (!response.ok) {
         const error = await response.json();
+        console.error("❌ Server error:", error);
         throw new Error(error.message || "Failed to save reservation");
       }
 
       const savedReservation = await response.json();
+      console.log("✅ Reservation saved! Returned ID:", savedReservation.id);
+
       setLastReservation(savedReservation);
       setReservations((prev) => [...prev, savedReservation]);
       return savedReservation;
     } catch (error) {
-      console.error("Error saving reservation:", error);
+      console.error("❌ Reservation submission error:", error);
       throw error;
     }
   }

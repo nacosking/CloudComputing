@@ -131,46 +131,49 @@ export async function registerRoutes(
   // TEMPORARY WORKAROUND: Update your POST /api/reservations route in routes.ts
 
   app.post("/api/reservations", async (req, res) => {
-    console.log("------------------------------------------------");
-    console.log("📝 [PM2 LOG] Incoming Reservation Request");
-    console.log("👉 User ID from Session:", (req.user as any)?.id);
-    console.log("👉 Authenticated?:", req.isAuthenticated());
-    console.log("👉 Body Data:", req.body);
-    console.log("------------------------------------------------");
+    // 🔍 DEEP LOGGING FOR PM2
+    console.log("================================================");
+    console.log("📋 [RESERVATION] Incoming Request");
+    console.log("🔐 Session ID:", req.sessionID?.substring(0, 10) + "...");
+    console.log("✅ Is Authenticated:", req.isAuthenticated());
+    console.log("👤 User from Session:", req.user);
+    console.log("📦 Request Body:", req.body);
+    console.log("================================================");
+
     try {
+      // 1. Strict Auth Check
+      if (!req.isAuthenticated() || !req.user) {
+        console.error("❌ REJECTED: User not authenticated");
+        return res.status(401).json({
+          message: "You must be logged in to make a reservation"
+        });
+      }
+
+      // 2. Get User from Session
+      const user = req.user as any;
+      console.log("✅ Found User:", { id: user.id, email: user.email });
+
+      // 3. Parse Body
       const input = insertReservationSchema.parse(req.body);
 
-      // ✅ TRY 1: Check if user is logged in via session
-      if (req.isAuthenticated() && req.user) {
-        const user = req.user as any;
-        (input as any).userId = user.id;
-        console.log("✅ User authenticated via session:", user.id);
-      }
-      // ✅ TRY 2: Fallback - lookup user by email
-      else if (input.email) {
-        try {
-          const user = await storage.getUserByEmail(input.email);
-          if (user) {
-            (input as any).userId = user.id;
-            console.log("✅ User found by email:", user.id);
-          } else {
-            console.log("⚠️ No user found for email:", input.email);
-          }
-        } catch (err) {
-          console.error("Error looking up user by email:", err);
-        }
-      }
+      // 4. INJECT USER ID FROM SESSION
+      (input as any).userId = user.id;
+      console.log("✅ Injecting userId:", user.id);
 
+      // 5. Save to DB
       const reservation = await storage.createReservation(input);
+
+      console.log("🎉 SUCCESS: Reservation created:", reservation.id);
       res.status(201).json(reservation);
     } catch (err) {
       if (err instanceof z.ZodError) {
+        console.error("❌ Validation error:", err.errors);
         return res.status(400).json({
           message: err.errors[0].message,
           field: err.errors[0].path.join('.'),
         });
       }
-      console.error("Reservation Error:", err);
+      console.error("❌ DB Error:", err);
       res.status(500).json({ error: "Reservation failed" });
     }
   });
