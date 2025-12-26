@@ -9,7 +9,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
   // 1. Setup Session Auth (Passport.js) - This also registers the auth routes
   setupAuth(app);
 
@@ -31,15 +31,15 @@ export async function registerRoutes(
     try {
       const items = await storage.getMenuItemsWithCategories();
 
-      const menuData: Record<string, any[]> = { 
-        breakfast: [], 
-        lunch: [], 
-        dinner: [] 
+      const menuData: Record<string, any[]> = {
+        breakfast: [],
+        lunch: [],
+        dinner: []
       };
-      
+
       items.forEach(item => {
         let catName = item.categoryName ? item.categoryName.toLowerCase() : 'uncategorized';
-        
+
         // Mapping DB Category names to Frontend Tabs
         if (catName === 'starters') catName = 'breakfast';
         if (catName === 'mains') catName = 'lunch';
@@ -49,7 +49,7 @@ export async function registerRoutes(
           menuData[catName].push(item);
         }
       });
-      
+
       res.json(menuData);
     } catch (err) {
       console.error("Menu Fetch Error:", err);
@@ -130,8 +130,19 @@ export async function registerRoutes(
 
   app.post("/api/reservations", async (req, res) => {
     try {
+      // 1. Parse the form data (Date, Time, Guests, Name...)
       const input = insertReservationSchema.parse(req.body);
+
+      // ✅ FIX: Check if user is logged in, then attach their ID
+      if (req.isAuthenticated() && req.user) {
+        const user = req.user as any;
+        // Force the userId into the input object
+        (input as any).userId = user.id;
+      }
+
+      // 2. Create the reservation with the ID (or null if guest)
       const reservation = await storage.createReservation(input);
+
       res.status(201).json(reservation);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -145,136 +156,111 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/reservations", async (req, res) => {
-    try {
-      if (req.isAuthenticated()) {
-        const user = req.user as any;
-        if (user.isAdmin) {
-          // Admin sees all reservations
-          const reservations = await storage.getReservations();
-          res.json(reservations);
+  // ============================================================
+  //   DATABASE SEEDING
+  // ============================================================
+  export async function seedDatabase() {
+    const categories = await storage.getCategories();
+
+    if (categories.length === 0) {
+      console.log("🌱 Seeding Database...");
+
+      // Create categories
+      const starters = await storage.createCategory({
+        name: "Starters",
+        slug: "starters"
+      });
+      const mains = await storage.createCategory({
+        name: "Mains",
+        slug: "mains"
+      });
+      const desserts = await storage.createCategory({
+        name: "Desserts",
+        slug: "desserts"
+      });
+
+      console.log("✅ Categories created");
+
+      // Create default admin user
+      try {
+        const existingAdmin = await storage.getUserByEmail("admin@lumiere.com");
+        if (!existingAdmin) {
+          const hashedPassword = await hashPassword("admin123");
+          await storage.createUser({
+            username: "admin",
+            name: "Admin User",
+            email: "admin@lumiere.com",
+            password: hashedPassword,
+            isAdmin: true
+          });
+          console.log("✅ Admin user created");
+          console.log("   📧 Email: admin@lumiere.com");
+          console.log("   🔑 Password: admin123");
         } else {
-          // Regular user sees only their reservations
-          const reservations = await storage.getReservationsByEmail(user.email);
-          res.json(reservations);
+          console.log("ℹ️  Admin user already exists");
         }
-      } else {
-        res.status(401).json({ message: "Not authenticated" });
+      } catch (err) {
+        console.error("❌ Error creating admin:", err);
       }
-    } catch (err) {
-      console.error("Get Reservations Error:", err);
-      res.status(500).json({ error: "Failed to fetch reservations" });
+
+      // Create sample menu items
+      await storage.createMenuItem({
+        categoryId: starters.id,
+        name: "Bruschetta",
+        description: "Grilled bread with fresh tomatoes, basil, and olive oil",
+        price: 800,
+        available: true,
+        imageUrl: ""
+      });
+
+      await storage.createMenuItem({
+        categoryId: starters.id,
+        name: "Caesar Salad",
+        description: "Crisp romaine lettuce with parmesan and croutons",
+        price: 1200,
+        available: true,
+        imageUrl: ""
+      });
+
+      await storage.createMenuItem({
+        categoryId: mains.id,
+        name: "Grilled Salmon",
+        description: "Fresh Atlantic salmon with herbs and lemon butter",
+        price: 2400,
+        available: true,
+        imageUrl: ""
+      });
+
+      await storage.createMenuItem({
+        categoryId: mains.id,
+        name: "Beef Tenderloin",
+        description: "Premium beef with roasted vegetables",
+        price: 3200,
+        available: true,
+        imageUrl: ""
+      });
+
+      await storage.createMenuItem({
+        categoryId: desserts.id,
+        name: "Tiramisu",
+        description: "Classic Italian coffee-flavored dessert",
+        price: 900,
+        available: true,
+        imageUrl: ""
+      });
+
+      await storage.createMenuItem({
+        categoryId: desserts.id,
+        name: "Chocolate Lava Cake",
+        description: "Warm chocolate cake with molten center",
+        price: 1100,
+        available: true,
+        imageUrl: ""
+      });
+
+      console.log("✅ Sample menu items created");
+      console.log("🎉 Database seed completed!");
+    } else {
+      console.log("ℹ️  Database already seeded");
     }
-  });
-
-  return httpServer;
-}
-
-// ============================================================
-//   DATABASE SEEDING
-// ============================================================
-export async function seedDatabase() {
-  const categories = await storage.getCategories();
-  
-  if (categories.length === 0) {
-    console.log("🌱 Seeding Database...");
-    
-    // Create categories
-    const starters = await storage.createCategory({ 
-      name: "Starters", 
-      slug: "starters" 
-    });
-    const mains = await storage.createCategory({ 
-      name: "Mains", 
-      slug: "mains" 
-    });
-    const desserts = await storage.createCategory({ 
-      name: "Desserts", 
-      slug: "desserts" 
-    });
-
-    console.log("✅ Categories created");
-
-    // Create default admin user
-    try {
-      const existingAdmin = await storage.getUserByEmail("admin@lumiere.com");
-      if (!existingAdmin) {
-        const hashedPassword = await hashPassword("admin123");
-        await storage.createUser({
-          username: "admin",
-          name: "Admin User",
-          email: "admin@lumiere.com",
-          password: hashedPassword,
-          isAdmin: true
-        });
-        console.log("✅ Admin user created");
-        console.log("   📧 Email: admin@lumiere.com");
-        console.log("   🔑 Password: admin123");
-      } else {
-        console.log("ℹ️  Admin user already exists");
-      }
-    } catch (err) {
-      console.error("❌ Error creating admin:", err);
-    }
-
-    // Create sample menu items
-    await storage.createMenuItem({ 
-      categoryId: starters.id, 
-      name: "Bruschetta", 
-      description: "Grilled bread with fresh tomatoes, basil, and olive oil", 
-      price: 800, 
-      available: true,
-      imageUrl: ""
-    });
-
-    await storage.createMenuItem({ 
-      categoryId: starters.id, 
-      name: "Caesar Salad", 
-      description: "Crisp romaine lettuce with parmesan and croutons", 
-      price: 1200, 
-      available: true,
-      imageUrl: ""
-    });
-
-    await storage.createMenuItem({ 
-      categoryId: mains.id, 
-      name: "Grilled Salmon", 
-      description: "Fresh Atlantic salmon with herbs and lemon butter", 
-      price: 2400, 
-      available: true,
-      imageUrl: ""
-    });
-
-    await storage.createMenuItem({ 
-      categoryId: mains.id, 
-      name: "Beef Tenderloin", 
-      description: "Premium beef with roasted vegetables", 
-      price: 3200, 
-      available: true,
-      imageUrl: ""
-    });
-
-    await storage.createMenuItem({ 
-      categoryId: desserts.id, 
-      name: "Tiramisu", 
-      description: "Classic Italian coffee-flavored dessert", 
-      price: 900, 
-      available: true,
-      imageUrl: ""
-    });
-
-    await storage.createMenuItem({ 
-      categoryId: desserts.id, 
-      name: "Chocolate Lava Cake", 
-      description: "Warm chocolate cake with molten center", 
-      price: 1100, 
-      available: true,
-      imageUrl: ""
-    });
-    
-    console.log("✅ Sample menu items created");
-    console.log("🎉 Database seed completed!");
-  } else {
-    console.log("ℹ️  Database already seeded");
   }
-}
