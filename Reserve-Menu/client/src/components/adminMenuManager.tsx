@@ -98,7 +98,7 @@ export function AdminMenuManager() {
             <div className="p-6 bg-gray-50 border-b border-gray-200">
                 <h3 className="font-semibold text-lg flex items-center gap-2 text-gray-800">
                     {editingItem ? <Edit className="w-5 h-5 text-blue-600" /> : <Plus className="w-5 h-5 text-blue-600" />}
-                    {editingItem ? "Edit Dish Details" : "Add New Dish"}
+                    {editingItem ? "Edit Dish Details" : "Add New Dishs"}
                 </h3>
                 
                 <div className="mt-4">
