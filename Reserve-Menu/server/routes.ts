@@ -129,12 +129,11 @@ export async function registerRoutes(
   //   RESERVATION ROUTES
   // ============================================================
 
-  // ✅ NEW ROUTE: Mark reservation as paid
+  // ✅ Mark reservation as paid
   app.patch("/api/reservations/:id/pay", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { qrUrl } = req.body;
-      // Call the storage method we just made
       const updatedReservation = await storage.markReservationPaid(id, qrUrl);
       res.json(updatedReservation);
     } catch (err) {
@@ -143,20 +142,28 @@ export async function registerRoutes(
     }
   });
 
+  // ✅ CREATE RESERVATION
   app.post("/api/reservations", async (req, res) => {
     try {
-      // 1. Parse the incoming form data (Date, Time, Guests, etc.)
+      // 1. Require authentication
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Must be logged in to make a reservation" });
+      }
+
+      const user = req.user as any;
+      console.log("🎫 Creating reservation for user:", user.id, user.email);
+
+      // 2. Parse the incoming form data
       const input = insertReservationSchema.parse(req.body);
 
-      // 2. Get User ID from the Session
-      const userId = req.isAuthenticated() && req.user ? (req.user as any).id : null;
-
-      // 3. Merge the session userId with the form input
+      // 3. Create reservation with BOTH userId AND email
       const reservation = await storage.createReservation({
         ...input,
-        userId: userId 
+        userId: user.id,
+        email: input.email || user.email // Use form email or fallback to user's email
       });
 
+      console.log("✅ Reservation created:", reservation.id, "for user:", user.id);
       res.status(201).json(reservation);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -170,21 +177,36 @@ export async function registerRoutes(
     }
   });
 
+  // ✅ GET RESERVATIONS (FIXED TO ALWAYS FETCH BY BOTH userId AND email)
   app.get("/api/reservations", async (req, res) => {
     try {
-      if (req.isAuthenticated()) {
-        const user = req.user as any;
-        if (user.isAdmin) {
-          // Admin sees all reservations
-          const reservations = await storage.getReservations();
-          res.json(reservations);
-        } else {
-          // ✅ CRITICAL FIX: Fetch by User ID instead of Email
-          const reservations = await storage.getReservationsByUserId(user.id);
-          res.json(reservations);
-        }
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const user = req.user as any;
+      console.log("🔍 Fetching reservations for user:", {
+        userId: user.id,
+        email: user.email,
+        isAdmin: user.isAdmin
+      });
+
+      if (user.isAdmin) {
+        // Admin sees all reservations
+        const reservations = await storage.getReservations();
+        console.log("👑 Admin fetched", reservations.length, "reservations");
+        res.json(reservations);
       } else {
-        res.status(401).json({ message: "Not authenticated" });
+        // ✅ CRITICAL FIX: Fetch by BOTH userId AND email
+        const reservations = await storage.getReservationsByUserIdOrEmail(user.id, user.email);
+        console.log("📋 User fetched", reservations.length, "reservations");
+        
+        // Debug: Log the reservation IDs and which field matched
+        reservations.forEach(r => {
+          console.log(`  - Reservation ${r.id}: userId=${r.userId}, email=${r.email}`);
+        });
+        
+        res.json(reservations);
       }
     } catch (err) {
       console.error("Get Reservations Error:", err);

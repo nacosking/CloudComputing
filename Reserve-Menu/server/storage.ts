@@ -6,7 +6,7 @@ import {
   type MenuItem, type InsertMenuItem,
   type Reservation, type InsertReservation
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
@@ -39,7 +39,8 @@ export interface IStorage {
   createReservation(reservation: InsertReservation): Promise<Reservation>;
   getReservations(): Promise<Reservation[]>;
   getReservationsByEmail(email: string): Promise<Reservation[]>;
-  getReservationsByUserId(userId: number): Promise<Reservation[]>; // ✅ ADDED THIS
+  getReservationsByUserId(userId: number): Promise<Reservation[]>;
+  getReservationsByUserIdOrEmail(userId: number, email: string): Promise<Reservation[]>; // ✅ NEW
   updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation>;
   
   // Payment Method
@@ -59,8 +60,8 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(reservations)
       .set({ 
-        status: "paid", // Update status
-        qrUrl: qrUrl    // Update QR URL
+        status: "paid",
+        qrUrl: qrUrl
       })
       .where(eq(reservations.id, id))
       .returning();
@@ -202,12 +203,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getReservationsByEmail(email: string): Promise<Reservation[]> {
-    return await db.select().from(reservations).where(eq(reservations.email, email));
+    return await db.select().from(reservations).where(eq(reservations.email, email)).orderBy(reservations.createdAt);
   }
 
-  // ✅ ADDED THIS FUNCTION
   async getReservationsByUserId(userId: number): Promise<Reservation[]> {
     return await db.select().from(reservations).where(eq(reservations.userId, userId)).orderBy(reservations.createdAt);
+  }
+
+  // ✅ NEW METHOD: Fetch by EITHER userId OR email
+  async getReservationsByUserIdOrEmail(userId: number, email: string): Promise<Reservation[]> {
+    return await db
+      .select()
+      .from(reservations)
+      .where(
+        or(
+          eq(reservations.userId, userId),
+          eq(reservations.email, email)
+        )
+      )
+      .orderBy(reservations.createdAt);
   }
 
   async updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation> {
