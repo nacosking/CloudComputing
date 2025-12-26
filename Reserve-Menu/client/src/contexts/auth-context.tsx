@@ -50,12 +50,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [lastReservation, setLastReservation] = useState<Reservation | null>(null);
 
-  // Check authentication status on mount
   useEffect(() => {
     checkAuth();
   }, []);
 
-  // Fetch reservations when user logs in
   useEffect(() => {
     if (user) {
       fetchReservations();
@@ -64,14 +62,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  // ✅ HELPER: Get Authorization Header
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { "Authorization": `Bearer ${token}` } : {};
+  };
+
   async function checkAuth() {
+    const token = localStorage.getItem("token");
+    // If no token exists, stop loading and return
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/user", {
-        credentials: "include",
+        headers: { ...getAuthHeaders() }, // ✅ FIXED: Send Token
       });
+
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
+      } else {
+        // If token is invalid (401), clear it
+        localStorage.removeItem("token");
+        setUser(null);
       }
     } catch (err) {
       console.error("Auth check failed:", err);
@@ -85,7 +101,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
-      credentials: "include",
     });
 
     if (!res.ok) {
@@ -93,8 +108,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(error.message || "Login failed");
     }
 
-    const userData = await res.json();
-    setUser(userData);
+    const data = await res.json();
+
+    // ✅ FIXED: Save Token to LocalStorage
+    // Assuming backend returns { token: "...", user: {...} }
+    if (data.token) {
+      localStorage.setItem("token", data.token);
+    }
+
+    // If your backend returns the user object inside data.user, use that.
+    // If it returns the user object directly mixed with the token, use data.
+    const userObj = data.user || data;
+    setUser(userObj);
   }
 
   async function register(data: RegisterData) {
@@ -102,7 +127,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
-      credentials: "include",
     });
 
     if (!res.ok) {
@@ -110,21 +134,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(error.message || "Registration failed");
     }
 
-    const userData = await res.json();
-    setUser(userData);
+    const responseData = await res.json();
+
+    // ✅ FIXED: Save Token on Register too
+    if (responseData.token) {
+      localStorage.setItem("token", responseData.token);
+    }
+
+    const userObj = responseData.user || responseData;
+    setUser(userObj);
   }
 
   async function logout() {
-    const res = await fetch("/api/logout", {
-      method: "POST",
-      credentials: "include",
-    });
-
-    if (res.ok) {
-      setUser(null);
-      setReservations([]);
-      setLastReservation(null);
+    // Optional: Call API to invalidate token on server if needed
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } catch (e) {
+      // ignore logout errors
     }
+
+    // ✅ FIXED: Clear Token
+    localStorage.removeItem("token");
+    setUser(null);
+    setReservations([]);
+    setLastReservation(null);
   }
 
   async function addReservation(reservationData: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">): Promise<Reservation> {
@@ -133,8 +166,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...getAuthHeaders(), // ✅ FIXED: Send Token
         },
-        credentials: "include",
         body: JSON.stringify(reservationData),
       });
 
@@ -155,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function fetchReservations() {
     try {
       const response = await fetch("/api/reservations", {
-        credentials: "include",
+        headers: { ...getAuthHeaders() }, // ✅ FIXED: Send Token
       });
 
       if (response.ok) {
@@ -168,15 +201,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
+    <AuthContext.Provider
+      value={{
+        user,
         isLoading,
-        reservations, 
-        lastReservation, 
-        login, 
+        reservations,
+        lastReservation,
+        login,
         register,
-        logout, 
+        logout,
         checkAuth,
         addReservation,
         fetchReservations
