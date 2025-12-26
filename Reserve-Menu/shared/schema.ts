@@ -20,7 +20,6 @@ export const users = pgTable("users", {
 // =========================================================
 export const reservations = pgTable("reservations", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id"), // Optional: link to a registered user if logged in
   name: text("name").notNull(),
   email: text("email").notNull(),
   phone: text("phone"),
@@ -73,7 +72,7 @@ export const menuItemRelations = relations(menuItems, ({ one }) => ({
 // =========================================================
 
 // User Registration Schema
-export const insertUserSchema = createInsertSchema(users).omit({ 
+export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   isAdmin: true // Users cannot make themselves admin
 });
@@ -87,12 +86,12 @@ export const insertReservationSchema = createInsertSchema(reservations).omit({
 });
 
 // Menu Item Schema
-export const insertMenuItemSchema = createInsertSchema(menuItems).omit({ 
-  id: true 
+export const insertMenuItemSchema = createInsertSchema(menuItems).omit({
+  id: true
 });
 
-export const insertCategorySchema = createInsertSchema(categories).omit({ 
-  id: true 
+export const insertCategorySchema = createInsertSchema(categories).omit({
+  id: true
 });
 
 // =========================================================
