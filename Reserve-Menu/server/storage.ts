@@ -21,14 +21,14 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+
   // Menu Methods
   getCategories(): Promise<Category[]>;
   getCategory(id: number): Promise<Category | undefined>;
   getMenuItems(categoryId?: number): Promise<MenuItem[]>;
   getMenuItem(id: number): Promise<MenuItem | undefined>;
   getMenuItemsWithCategories(): Promise<(MenuItem & { categoryName: string; categorySlug?: string })[]>;
-  
+
   // Admin Methods
   createCategory(category: InsertCategory): Promise<Category>;
   createMenuItem(item: InsertMenuItem): Promise<MenuItem>;
@@ -40,7 +40,7 @@ export interface IStorage {
   getReservations(): Promise<Reservation[]>;
   getReservationsByEmail(email: string): Promise<Reservation[]>;
   updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation>;
-  
+
   sessionStore: session.Store;
 }
 
@@ -124,7 +124,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(menuItems)
       .leftJoin(categories, eq(menuItems.categoryId, categories.id));
-    
+
     return result;
   }
 
@@ -153,19 +153,26 @@ export class DatabaseStorage implements IStorage {
 
   async createReservation(insertReservation: InsertReservation): Promise<Reservation> {
     const [reservation] = await db.insert(reservations).values(insertReservation).returning();
-    
+
     // Generate QR code and upload to S3
     try {
-      const qrData = JSON.stringify({ 
-        id: reservation.id, 
-        name: reservation.name, 
+      // ✅ CHECK IF S3 IS CONFIGURED
+      if (!BUCKET_NAME) {
+        console.warn("⚠️ S3_BUCKET_NAME not configured, skipping QR upload");
+        return reservation;
+      }
+
+      const qrData = JSON.stringify({
+        id: reservation.id,
+        name: reservation.name,
         date: reservation.date,
         time: reservation.time,
         guests: reservation.guests
       });
+
       const qrBuffer = await QRCode.toBuffer(qrData);
       const fileName = `reservations/${reservation.id}/qr_${Date.now()}_${Math.floor(Math.random() * 1000)}.png`;
-      
+
       await s3Client.send(new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: fileName,
@@ -174,9 +181,12 @@ export class DatabaseStorage implements IStorage {
       }));
 
       const qrUrl = `https://${BUCKET_NAME}.s3.amazonaws.com/${fileName}`;
+      console.log("✅ QR uploaded successfully:", qrUrl);
       return await this.updateReservationQrUrl(reservation.id, qrUrl);
+
     } catch (error) {
-      console.error("QR/S3 Error:", error);
+      console.error("❌ QR/S3 Error (non-fatal):", error);
+      // ✅ RETURN THE RESERVATION ANYWAY - DON'T FAIL THE WHOLE REQUEST
       return reservation;
     }
   }
