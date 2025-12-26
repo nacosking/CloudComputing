@@ -138,16 +138,6 @@ export async function registerRoutes(
     console.log("================================================");
 
     try {
-      // 1. Strict Auth Check
-      if (!req.isAuthenticated() || !req.user) {
-        console.error("❌ REJECTED: User not authenticated");
-        return res.status(401).json({
-          message: "You must be logged in to make a reservation"
-        });
-      }
-
-      const user = req.user as any;
-      console.log("✅ Found User:", { id: user.id, email: user.email });
 
       // 2. Parse Body
       const input = insertReservationSchema.parse(req.body);
