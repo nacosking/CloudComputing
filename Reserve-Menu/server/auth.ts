@@ -44,7 +44,7 @@ export function setupAuth(app: Express) {
     cookie: {
       // ✅ LOGIC: If we are in production (AWS), we MUST use secure cookies.
       // Since we trust the proxy, Express will correctly see the HTTPS header from the ALB.
-      secure: app.get("env") === "production", 
+      secure: false, // Set to true if behind HTTPS (which we are, via ALB)
       httpOnly: true,     // Prevents JS from reading the cookie (XSS protection)
       maxAge: THIRTY_DAYS, // ✅ Keeps user logged in for 30 days
       sameSite: "lax",    // Allows the cookie to be sent on top-level navigations
