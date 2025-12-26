@@ -41,6 +41,9 @@ export interface IStorage {
   getReservationsByEmail(email: string): Promise<Reservation[]>;
   updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation>;
   
+  // Reservation Methods
+  markReservationPaid(id: number, qrUrl: string): Promise<Reservation>; // <--- ADD THIS
+  
   sessionStore: session.Store;
 }
 
@@ -49,6 +52,18 @@ export class DatabaseStorage implements IStorage {
 
   constructor() {
     this.sessionStore = new MemoryStore({ checkPeriod: 86400000 });
+  }
+  
+  async markReservationPaid(id: number, qrUrl: string): Promise<Reservation> {
+    const [updated] = await db
+      .update(reservations)
+      .set({ 
+        status: "paid", // Update status
+        qrUrl: qrUrl    // Update QR URL
+      })
+      .where(eq(reservations.id, id))
+      .returning();
+    return updated;
   }
 
   // ============================================================

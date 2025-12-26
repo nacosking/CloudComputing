@@ -124,9 +124,24 @@ export async function registerRoutes(
     }
   });
 
+
   // ============================================================
   //   RESERVATION ROUTES
   // ============================================================
+
+  // ✅ NEW ROUTE: Mark reservation as paid
+  app.patch("/api/reservations/:id/pay", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { qrUrl } = req.body;
+      // Call the storage method we just made
+      const updatedReservation = await storage.markReservationPaid(id, qrUrl);
+      res.json(updatedReservation);
+    } catch (err) {
+      console.error("Payment Update Error:", err);
+      res.status(500).json({ error: "Failed to update payment status" });
+    }
+  });
 
   app.post("/api/reservations", async (req, res) => {
     try {

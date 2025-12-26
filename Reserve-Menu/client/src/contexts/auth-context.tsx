@@ -171,12 +171,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setReservations((prev) => prev.filter((r) => r.id.toString() !== id));
   }
 
-  // ✅ ADDED: The missing function implementation
-  function markReservationPaid(id: number, qrData: string) {
-    console.log(`Reservation ${id} marked as paid. QR Data: ${qrData}`);
-    
-    // Optional: Update local state if you want the UI to reflect changes immediately
-    // For now, this logging prevents the crash.
+  // Update reservation as paid in backend and local state
+  // ✅ UPDATED FUNCTION
+  async function markReservationPaid(id: number, qrData: string) {
+    try {
+      console.log(`Processing payment for reservation ${id}...`);
+
+      // 1. Call the backend to save the change
+      // Note: We use "include" to ensure the session cookie is sent!
+      const res = await fetch(`/api/reservations/${id}/pay`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qrUrl: qrData }),
+        credentials: "include"
+      });
+
+      if (!res.ok) throw new Error("Failed to update reservation on server");
+
+      const updatedReservation = await res.json();
+
+      // 2. Update Local State (So UI updates without refresh)
+      setReservations((prev) => 
+        prev.map((r) => (r.id === id ? updatedReservation : r))
+      );
+      // Update lastReservation too, so the success screen has the latest data
+      setLastReservation(updatedReservation);
+
+      console.log("✅ Payment status synced with server");
+
+    } catch (err) {
+      console.error("❌ Error marking reservation as paid:", err);
+      // You might want to show a toast error here
+    }
   }
 
   return (
@@ -193,7 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         addReservation,
         fetchReservations,
         cancelReservation,
-        markReservationPaid // ✅ ADDED: Exposed to the app
+        markReservationPaid
       }}
     >
       {children}
