@@ -6,6 +6,8 @@ import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import { Trash2, Calendar, Users, Clock, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
+// ✅ ADDED: Import the QR Code generator
+import { QRCodeCanvas } from "qrcode.react";
 
 export default function ReservationsPage() {
   const [, navigate] = useLocation();
@@ -139,6 +141,7 @@ export default function ReservationsPage() {
                   </div>
 
                   <div className="flex flex-col justify-between">
+                    {/* ✅ UPDATED LOGIC: Draw QR Code from Text */}
                     {reservation.isPaid && reservation.qrUrl ? (
                       <div className="bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20 rounded-lg p-6 mb-6">
                         <div className="flex items-center gap-2 mb-4">
@@ -148,14 +151,18 @@ export default function ReservationsPage() {
                         <p className="text-muted-foreground text-sm mb-4">
                           Show this QR code when you arrive at the restaurant.
                         </p>
-                        <div className="bg-background rounded-lg p-4 flex justify-center border border-primary/30">
-                          <img
-                            src={reservation.qrUrl}
-                            alt="Reservation QR Code"
-                            className="w-40 h-40 object-contain"
+
+                        {/* ⬇️ CHANGED: Use QRCodeCanvas instead of <img> */}
+                        <div className="bg-white rounded-lg p-4 flex justify-center border border-primary/30 w-fit mx-auto">
+                          <QRCodeCanvas
+                            value={reservation.qrUrl}
+                            size={150}
+                            level="H"
+                            includeMargin={true}
                           />
                         </div>
-                        <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20">
+
+                        <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20 text-center">
                           <p className="text-xs text-muted-foreground mb-1">Confirmation ID</p>
                           <p className="font-mono text-xs font-bold text-primary">{reservation.id}</p>
                         </div>
