@@ -148,15 +148,13 @@ export async function registerRoutes(
       // 1. Parse the incoming form data (Date, Time, Guests, etc.)
       const input = insertReservationSchema.parse(req.body);
 
-      // 2. CRITICAL FIX: Get User ID from the Session
-      // If the user is logged in, req.user will be defined.
-      // We cast it to 'any' or your 'User' type to access .id
+      // 2. Get User ID from the Session
       const userId = req.isAuthenticated() && req.user ? (req.user as any).id : null;
 
       // 3. Merge the session userId with the form input
       const reservation = await storage.createReservation({
         ...input,
-        userId: userId // This overrides whatever the frontend sent (or didn't send)
+        userId: userId 
       });
 
       res.status(201).json(reservation);
@@ -167,7 +165,7 @@ export async function registerRoutes(
           field: err.errors[0].path.join('.'),
         });
       }
-      console.error("Reservation Error:", err); // Log the real error for debugging
+      console.error("Reservation Error:", err); 
       res.status(500).json({ error: "Reservation failed" });
     }
   });
@@ -181,8 +179,8 @@ export async function registerRoutes(
           const reservations = await storage.getReservations();
           res.json(reservations);
         } else {
-          // Regular user sees only their reservations
-          const reservations = await storage.getReservationsByEmail(user.email);
+          // ✅ CRITICAL FIX: Fetch by User ID instead of Email
+          const reservations = await storage.getReservationsByUserId(user.id);
           res.json(reservations);
         }
       } else {

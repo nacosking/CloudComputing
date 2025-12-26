@@ -39,10 +39,11 @@ export interface IStorage {
   createReservation(reservation: InsertReservation): Promise<Reservation>;
   getReservations(): Promise<Reservation[]>;
   getReservationsByEmail(email: string): Promise<Reservation[]>;
+  getReservationsByUserId(userId: number): Promise<Reservation[]>; // ✅ ADDED THIS
   updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation>;
   
-  // Reservation Methods
-  markReservationPaid(id: number, qrUrl: string): Promise<Reservation>; // <--- ADD THIS
+  // Payment Method
+  markReservationPaid(id: number, qrUrl: string): Promise<Reservation>;
   
   sessionStore: session.Store;
 }
@@ -202,6 +203,11 @@ export class DatabaseStorage implements IStorage {
 
   async getReservationsByEmail(email: string): Promise<Reservation[]> {
     return await db.select().from(reservations).where(eq(reservations.email, email));
+  }
+
+  // ✅ ADDED THIS FUNCTION
+  async getReservationsByUserId(userId: number): Promise<Reservation[]> {
+    return await db.select().from(reservations).where(eq(reservations.userId, userId)).orderBy(reservations.createdAt);
   }
 
   async updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation> {
