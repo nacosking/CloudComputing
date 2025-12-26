@@ -53,7 +53,7 @@ export default function AdminPage() {
                         <p className="text-gray-500 mt-2">Add, edit, or remove items from the seasonal menu.</p>
                     </div>
 
-                    {/* This is the component we created earlier */}
+                    {/* This imports the component cleanly */}
                     <AdminMenuManager />
                 </div>
             </main>
