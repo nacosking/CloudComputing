@@ -64,12 +64,10 @@ export function setupAuth(app: Express) {
 
   // ... (Rest of your code remains the same) ...
 
-  // ✅ Middleware to log session status (Debugging)
+  // ✅ Middleware to log session status (Always log for debugging)
   app.use((req, res, next) => {
-    // Only log if session is missing or user is not found, to reduce noise
-    if (!req.isAuthenticated()) {
-      // console.log("⚠️ Unauthenticated Request:", req.path);
-    }
+    // Always log session status for every request
+    console.log("📋 Session check: {\n  path: '", req.path, "',\n  sessionID: '", req.sessionID ? req.sessionID.substring(0, 8) + "..." : null, "',\n  isAuthenticated: ", req.isAuthenticated(), ",\n  userId: ", req.user?.id || null, "\n}");
     next();
   });
 
