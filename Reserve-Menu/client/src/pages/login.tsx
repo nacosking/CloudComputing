@@ -46,7 +46,7 @@ export default function LoginPage() {
     try {
       await login(values.email, values.password);
       if (values.email.toLowerCase() === "admin@lumiere.com") {
-        navigate("/admin/menu");
+        navigate("/admin");
       } else {
         navigate("/reservations");
       }
