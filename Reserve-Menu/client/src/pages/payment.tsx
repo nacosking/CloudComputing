@@ -29,6 +29,47 @@ export default function PaymentPage() {
     resolver: zodResolver(paymentSchema),
   });
 
+  // ------------------------------------------------------------------
+  // FIX: Check for Success FIRST
+  // We check this before checking (!lastReservation) because markReservationPaid()
+  // might clear the reservation data from context, but we still want to show
+  // the success screen.
+  // ------------------------------------------------------------------
+  if (isSuccess) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full"
+        >
+          <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-8 md:p-12 rounded-2xl border border-primary/20 text-center">
+            <motion.div
+              animate={{ scale: [1, 1.2, 1] }}
+              transition={{ duration: 1, repeat: Infinity }}
+              className="flex justify-center mb-6"
+            >
+              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+                <Check className="w-8 h-8 text-primary" />
+              </div>
+            </motion.div>
+            <h2 className="font-serif text-3xl font-bold mb-3 text-foreground">Payment Successful!</h2>
+            <p className="text-foreground/70 mb-2">Deposit of $50.00 received</p>
+            <p className="text-sm text-foreground/60 mb-6">
+              Your reservation is confirmed and your deposit has been secured.
+            </p>
+            <p className="text-xs text-foreground/50 italic">
+              Redirecting to your reservations...
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // Check for missing reservation SECOND
+  // ------------------------------------------------------------------
   if (!lastReservation) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center">
@@ -42,7 +83,7 @@ export default function PaymentPage() {
   const depositAmount = 50; // Fixed deposit amount in USD
 
   // Ref for hidden QR code canvas
-  const qrRef = useRef(null);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   async function onSubmit(values: z.infer<typeof paymentSchema>) {
     setIsProcessing(true);
@@ -79,7 +120,8 @@ export default function PaymentPage() {
         const blob = await (await fetch(qrImageUrl)).blob();
         const formData = new FormData();
         formData.append('file', blob, `qr_${reservation.id}.png`);
-        formData.append('reservationId', reservation.id);
+        formData.append('reservationId', String(reservation.id));
+        
         // Adjust endpoint as needed
         const uploadRes = await fetch('/api/upload-qr', {
           method: 'POST',
@@ -103,38 +145,6 @@ export default function PaymentPage() {
     setTimeout(() => {
       navigate("/reservations");
     }, 2500);
-  }
-
-  if (isSuccess) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full"
-        >
-          <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-8 md:p-12 rounded-2xl border border-primary/20 text-center">
-            <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 1, repeat: Infinity }}
-              className="flex justify-center mb-6"
-            >
-              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
-                <Check className="w-8 h-8 text-primary" />
-              </div>
-            </motion.div>
-            <h2 className="font-serif text-3xl font-bold mb-3 text-foreground">Payment Successful!</h2>
-            <p className="text-foreground/70 mb-2">Deposit of ${depositAmount}.00 received</p>
-            <p className="text-sm text-foreground/60 mb-6">
-              Your reservation is confirmed and your deposit has been secured.
-            </p>
-            <p className="text-xs text-foreground/50 italic">
-              Redirecting to your reservations...
-            </p>
-          </div>
-        </motion.div>
-      </div>
-    );
   }
 
   return (
