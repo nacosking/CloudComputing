@@ -131,6 +131,12 @@ export async function registerRoutes(
   // TEMPORARY WORKAROUND: Update your POST /api/reservations route in routes.ts
 
   app.post("/api/reservations", async (req, res) => {
+    console.log("------------------------------------------------");
+    console.log("📝 [PM2 LOG] Incoming Reservation Request");
+    console.log("👉 User ID from Session:", (req.user as any)?.id);
+    console.log("👉 Authenticated?:", req.isAuthenticated());
+    console.log("👉 Body Data:", req.body);
+    console.log("------------------------------------------------");
     try {
       const input = insertReservationSchema.parse(req.body);
 
@@ -174,7 +180,7 @@ export async function registerRoutes(
   // GET user's reservations (requires authentication)
   // Add this route to your routes.ts file, in the RESERVATION ROUTES section
 
-// GET user's reservations (requires authentication)
+  // GET user's reservations (requires authentication)
   app.get("/api/reservations", async (req, res) => {
     try {
       // Check if user is authenticated
