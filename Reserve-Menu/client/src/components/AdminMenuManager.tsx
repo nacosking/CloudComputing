@@ -5,60 +5,73 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
-// Interface matching your OLD logic
 interface MenuItem {
     id: number;
-    category: string; // Storing as string like "breakfast"
+    category: string;
     name: string;
-    price: number;    // Keeping as number for math, but form handles string conversion
+    price: number;
     description: string;
+}
+
+// ✅ NEW: Interface for Category
+interface Category {
+    id: number;
+    name: string;
+    slug: string;
 }
 
 export function AdminMenuManager() {
     const { toast } = useToast();
-    
-    // --- STATE FROM YOUR ORIGINAL CODE ---
+
     const [items, setItems] = useState<MenuItem[]>([]);
+    // ✅ NEW: Store real categories from DB
+    const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState<number | null>(null);
-    
-    // Form State (Simple object, no react-hook-form)
-    const [formData, setFormData] = useState({ 
-        category: "breakfast", 
-        name: "", 
-        price: "", 
-        description: "" 
+
+    const [formData, setFormData] = useState({
+        category: "breakfast",
+        name: "",
+        price: "",
+        description: ""
     });
 
-    // --- 1. FETCH LOGIC (Original "Flatten" Strategy) ---
     useEffect(() => {
-        fetchMenu();
+        fetchData();
     }, []);
 
-    const fetchMenu = async () => {
+    const fetchData = async () => {
         try {
-            const res = await fetch('/api/menu');
-            if (!res.ok) throw new Error("Failed to fetch");
-            const data = await res.json();
-            
-            // Flatten the grouped data back into a single list
-            // Assuming data structure is { breakfast: [], lunch: [], dinner: [] }
+            // ✅ 1. Fetch BOTH Menu and Categories
+            const [menuRes, catRes] = await Promise.all([
+                fetch('/api/menu'),
+                fetch('/api/categories')
+            ]);
+
+            if (!menuRes.ok || !catRes.ok) throw new Error("Failed to fetch data");
+
+            const menuData = await menuRes.json();
+            const catData = await catRes.json();
+
+            // Store the real categories
+            setCategories(catData);
+
+            // Flatten the grouped data
             const allItems = [
-                ...(data.breakfast || []).map((i: any) => ({ ...i, category: 'breakfast' })),
-                ...(data.lunch || []).map((i: any) => ({ ...i, category: 'lunch' })),
-                ...(data.dinner || []).map((i: any) => ({ ...i, category: 'dinner' }))
+                ...(menuData.breakfast || []).map((i: any) => ({ ...i, category: 'breakfast' })),
+                ...(menuData.lunch || []).map((i: any) => ({ ...i, category: 'lunch' })),
+                ...(menuData.dinner || []).map((i: any) => ({ ...i, category: 'dinner' }))
             ];
-            
+
             setItems(allItems);
         } catch (error) {
-            console.error("Error fetching menu:", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not load menu items." });
+            console.error("Error fetching data:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not load data." });
         } finally {
             setLoading(false);
         }
     };
 
-    // --- 2. DELETE LOGIC ---
     const handleDelete = async (id: number) => {
         if (!confirm("Are you sure you want to delete this item?")) return;
 
@@ -73,15 +86,21 @@ export function AdminMenuManager() {
         }
     };
 
-    // --- 3. SUBMIT LOGIC ---
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Convert price to number (cents or dollars depending on your backend)
+        // ✅ 2. FIX: Find the REAL ID based on the selected slug
+        const selectedCategory = categories.find(c => c.slug === formData.category);
+
+        if (!selectedCategory) {
+            toast({ variant: "destructive", title: "Error", description: "Invalid Category selected" });
+            return;
+        }
+
         const payload = {
             ...formData,
-            price: parseInt(formData.price) || 0, 
-            categoryId: mapCategoryToId(formData.category) // Helper to convert string back to ID if DB needs it
+            price: parseInt(formData.price) || 0,
+            categoryId: selectedCategory.id // ✅ Uses the REAL ID from database
         };
 
         const url = isEditing ? `/api/menu-items/${isEditing}` : '/api/menu-items';
@@ -98,7 +117,7 @@ export function AdminMenuManager() {
                 toast({ title: "Success", description: isEditing ? "Item Updated!" : "Item Added!" });
                 setIsEditing(null);
                 setFormData({ category: "breakfast", name: "", price: "", description: "" });
-                fetchMenu(); // Refresh list
+                fetchData();
             } else {
                 throw new Error("Failed to save");
             }
@@ -107,7 +126,6 @@ export function AdminMenuManager() {
         }
     };
 
-    // --- 4. EDIT HELPER ---
     const startEdit = (item: MenuItem) => {
         setIsEditing(item.id);
         setFormData({
@@ -123,14 +141,6 @@ export function AdminMenuManager() {
         setFormData({ category: "breakfast", name: "", price: "", description: "" });
     };
 
-    // Helper to map string categories to IDs (if your backend requires IDs for POST/PATCH)
-    const mapCategoryToId = (cat: string) => {
-        if (cat === "breakfast") return 1;
-        if (cat === "lunch") return 2;
-        if (cat === "dinner") return 3;
-        return 1;
-    };
-
     if (loading) return <div className="text-center py-12"><Loader2 className="animate-spin mx-auto h-8 w-8 text-primary" /> Loading Admin Panel...</div>;
 
     return (
@@ -140,57 +150,55 @@ export function AdminMenuManager() {
                     {isEditing ? <Edit className="w-5 h-5 text-blue-600" /> : <Plus className="w-5 h-5 text-blue-600" />}
                     {isEditing ? "Edit Dish Details" : "Add New Dish"}
                 </h3>
-                
+
                 <div className="mt-4">
-                    {/* Standard HTML Form using Shadcn Components */}
                     <form onSubmit={handleSubmit}>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            
-                            {/* Category Select */}
+
                             <div className="space-y-2">
-                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Category</label>
-                                <Select 
-                                    value={formData.category} 
-                                    onValueChange={(val) => setFormData({...formData, category: val})}
+                                <label className="text-sm font-medium leading-none">Category</label>
+                                <Select
+                                    value={formData.category}
+                                    onValueChange={(val) => setFormData({ ...formData, category: val })}
                                 >
                                     <SelectTrigger className="bg-white">
                                         <SelectValue placeholder="Select Category" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="breakfast">Breakfast</SelectItem>
-                                        <SelectItem value="lunch">Lunch</SelectItem>
-                                        <SelectItem value="dinner">Dinner</SelectItem>
+                                        {/* ✅ 3. FIX: Dynamic Dropdown Options */}
+                                        {categories.map(cat => (
+                                            <SelectItem key={cat.id} value={cat.slug}>
+                                                {cat.name}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
 
-                            {/* Name Input */}
                             <div className="space-y-2">
                                 <label className="text-sm font-medium leading-none">Dish Name</label>
-                                <Input 
-                                    placeholder="e.g. Truffle Risotto" 
+                                <Input
+                                    placeholder="e.g. Truffle Risotto"
                                     className="bg-white"
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    required 
+                                    required
                                 />
                             </div>
 
-                            {/* Price Input */}
                             <div className="space-y-2">
                                 <label className="text-sm font-medium leading-none">Price (cents)</label>
-                                <Input 
-                                    placeholder="2400" 
-                                    type="number" 
+                                <Input
+                                    placeholder="2400"
+                                    type="number"
                                     className="bg-white"
                                     value={formData.price}
                                     onChange={e => setFormData({ ...formData, price: e.target.value })}
-                                    required 
+                                    required
                                 />
                             </div>
                         </div>
 
-                        {/* Description Textarea */}
                         <div className="space-y-2 mb-4">
                             <label className="text-sm font-medium leading-none">Description</label>
                             <textarea
@@ -201,7 +209,6 @@ export function AdminMenuManager() {
                             />
                         </div>
 
-                        {/* Action Buttons */}
                         <div className="flex gap-2">
                             <Button type="submit" className="bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2">
                                 <Save size={16} /> {isEditing ? "Update Item" : "Add Item"}
@@ -222,7 +229,6 @@ export function AdminMenuManager() {
                 </div>
             </div>
 
-            {/* --- TABLE LIST --- */}
             <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead>
