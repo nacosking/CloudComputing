@@ -6,7 +6,6 @@ import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import { Trash2, Calendar, Users, Clock, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
-import { QRCodeCanvas } from "qrcode.react";
 
 export default function ReservationsPage() {
   const [, navigate] = useLocation();
@@ -91,9 +90,8 @@ export default function ReservationsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${
-                  cancelingId === reservation.id ? "opacity-50" : ""
-                }`}
+                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${cancelingId === reservation.id ? "opacity-50" : ""
+                  }`}
               >
                 <div className="grid md:grid-cols-2 gap-8">
                   <div>
@@ -141,7 +139,7 @@ export default function ReservationsPage() {
                   </div>
 
                   <div className="flex flex-col justify-between">
-                    {reservation.paid && reservation.qrCode ? (
+                    {reservation.isPaid && reservation.qrUrl ? (
                       <div className="bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20 rounded-lg p-6 mb-6">
                         <div className="flex items-center gap-2 mb-4">
                           <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -151,13 +149,10 @@ export default function ReservationsPage() {
                           Show this QR code when you arrive at the restaurant.
                         </p>
                         <div className="bg-background rounded-lg p-4 flex justify-center border border-primary/30">
-                          <QRCodeCanvas
-                            value={reservation.qrCode}
-                            size={160}
-                            level="H"
-                            includeMargin={true}
-                            bgColor="#ffffff"
-                            fgColor="#000000"
+                          <img
+                            src={reservation.qrUrl}
+                            alt="Reservation QR Code"
+                            className="w-40 h-40 object-contain"
                           />
                         </div>
                         <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20">
@@ -180,7 +175,7 @@ export default function ReservationsPage() {
                     )}
 
                     <Button
-                      onClick={() => handleCancel(reservation.id)}
+                      onClick={() => handleCancel(reservation.id.toString())}
                       variant="ghost"
                       className="w-full border border-red-200 text-red-600 hover:bg-red-50 group"
                     >

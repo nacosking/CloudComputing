@@ -10,16 +10,14 @@ export interface User {
 
 export interface Reservation {
   id: number;
-  userId?: number;
   name: string;
   email: string;
-  phone?: string;
   date: string;
   time: string;
   guests: number;
-  status: string;
-  qrUrl?: string;
   createdAt?: string;
+  isPaid?: boolean;
+  qrUrl?: string;
 }
 
 interface AuthContextType {
