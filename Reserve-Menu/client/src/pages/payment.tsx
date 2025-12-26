@@ -102,7 +102,7 @@ export default function PaymentPage() {
 
       // 5. Finalize
       // We use the S3 URL if upload worked, otherwise we fall back to the text data
-      markReservationPaid(reservation.id, qrImageS3Url || qrData);
+      await markReservationPaid(reservation.id, qrImageS3Url || qrData);
       
       setIsSuccess(true);
       setTimeout(() => {
