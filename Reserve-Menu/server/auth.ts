@@ -43,6 +43,7 @@ export function setupAuth(app: Express) {
       // Without this, the browser throws away the cookie immediately.
       secure: false,
       httpOnly: true,
+      sameSite: "lax",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       sameSite: "lax",
     }
