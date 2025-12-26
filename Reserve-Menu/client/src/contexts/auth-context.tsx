@@ -33,6 +33,7 @@ interface AuthContextType {
   checkAuth: () => Promise<void>;
   addReservation: (reservation: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">) => Promise<Reservation>;
   fetchReservations: () => Promise<void>;
+  cancelReservation: (id: string) => void;
 }
 
 interface RegisterData {
@@ -62,41 +63,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  // ✅ HELPER: Get Authorization Header
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("token");
-    return token ? { "Authorization": `Bearer ${token}` } : {};
-  };
-
   async function checkAuth() {
-    const token = localStorage.getItem("token");
-    // If no token exists, stop loading and return
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
     try {
+      // ✅ FIXED: Use credentials: "include" to send session cookie
       const res = await fetch("/api/user", {
-        headers: { ...getAuthHeaders() }, // ✅ FIXED: Send Token
+        credentials: "include",
       });
 
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
       } else {
-        // If token is invalid (401), clear it
-        localStorage.removeItem("token");
         setUser(null);
       }
     } catch (err) {
       console.error("Auth check failed:", err);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
   }
 
   async function login(email: string, password: string) {
+    // ✅ FIXED: Use credentials: "include" to receive and send session cookie
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -109,25 +98,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(error.message || "Login failed");
     }
 
-    const data = await res.json();
-
-    // ✅ FIXED: Save Token to LocalStorage
-    // Assuming backend returns { token: "...", user: {...} }
-    if (data.token) {
-      localStorage.setItem("token", data.token);
-    }
-
-    // If your backend returns the user object inside data.user, use that.
-    // If it returns the user object directly mixed with the token, use data.
-    const userObj = data.user || data;
-    setUser(userObj);
+    const userData = await res.json();
+    setUser(userData);
   }
 
   async function register(data: RegisterData) {
+    // ✅ FIXED: Use credentials: "include"
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+      credentials: "include",
     });
 
     if (!res.ok) {
@@ -135,27 +116,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(error.message || "Registration failed");
     }
 
-    const responseData = await res.json();
-
-    // ✅ FIXED: Save Token on Register too
-    if (responseData.token) {
-      localStorage.setItem("token", responseData.token);
-    }
-
-    const userObj = responseData.user || responseData;
-    setUser(userObj);
+    const userData = await res.json();
+    setUser(userData);
   }
 
   async function logout() {
-    // Optional: Call API to invalidate token on server if needed
     try {
-      await fetch("/api/logout", { method: "POST" });
+      // ✅ FIXED: Use credentials: "include"
+      await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include"
+      });
     } catch (e) {
-      // ignore logout errors
+      console.error("Logout error:", e);
     }
 
-    // ✅ FIXED: Clear Token
-    localStorage.removeItem("token");
     setUser(null);
     setReservations([]);
     setLastReservation(null);
@@ -163,17 +138,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function addReservation(reservationData: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">): Promise<Reservation> {
     try {
+      // ✅ FIXED: Use credentials: "include" to send session cookie
       const response = await fetch("/api/reservations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeaders(), // ✅ FIXED: Send Token
         },
+        credentials: "include",
         body: JSON.stringify(reservationData),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to save reservation");
+        const error = await response.json();
+        throw new Error(error.message || "Failed to save reservation");
       }
 
       const savedReservation = await response.json();
@@ -188,8 +165,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function fetchReservations() {
     try {
+      // ✅ FIXED: Use credentials: "include"
       const response = await fetch("/api/reservations", {
-        headers: { ...getAuthHeaders() }, // ✅ FIXED: Send Token
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -199,6 +177,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Error fetching reservations:", error);
     }
+  }
+
+  function cancelReservation(id: string) {
+    setReservations((prev) => prev.filter((r) => r.id.toString() !== id));
   }
 
   return (
@@ -213,7 +195,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         checkAuth,
         addReservation,
-        fetchReservations
+        fetchReservations,
+        cancelReservation
       }}
     >
       {children}

@@ -156,6 +156,28 @@ export async function registerRoutes(
     }
   });
 
+  // Add this route to your routes.ts file, in the RESERVATION ROUTES section
+
+// GET user's reservations (requires authentication)
+app.get("/api/reservations", async (req, res) => {
+  try {
+    // Check if user is authenticated
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const user = req.user as any;
+
+    // Fetch reservations by email (or userId if you have that field)
+    const userReservations = await storage.getReservationsByEmail(user.email);
+
+    res.json(userReservations);
+  } catch (err) {
+    console.error("Fetch Reservations Error:", err);
+    res.status(500).json({ error: "Failed to fetch reservations" });
+  }
+});
+
   // ============================================================
   //   DATABASE SEEDING
   // ============================================================
