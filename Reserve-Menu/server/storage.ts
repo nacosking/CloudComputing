@@ -77,16 +77,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation> {
-    const [updated] = await db
-      .update(reservations)
-      .set({ qrUrl })
-      .where(eq(reservations.id, id))
-      .returning();
-
-    if (!updated) throw new Error("Reservation not found");
-    return updated;
-  }
 
   // ... rest of your existing methods (getUser, getCategories, etc.) ...
   async getUser(id: number): Promise<User | undefined> {

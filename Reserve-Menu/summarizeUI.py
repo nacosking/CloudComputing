@@ -4,7 +4,7 @@ import os
 included_extensions = ('.tf', '.ts', '.js', '.tsx', '.jsx', '.json', '.html', '.css')
 ignored_folders = {'node_modules', 'dist', 'build', '.git', '.terraform', '.next'}
 
-output_file = "full_project_code_latest.txt"
+output_file = "full_project_UIcode_latest.txt"
 
 def summarize_project():
     with open(output_file, 'w', encoding='utf-8') as outfile:

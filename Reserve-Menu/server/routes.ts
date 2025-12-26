@@ -19,11 +19,6 @@ export async function registerRoutes(
   // --- PRESERVED LOGIC: Authentication ---
   setupAuth(app);
 
-  // ============================================================
-  //  NEW FEATURE: ADMIN MENU MANAGEMENT (Direct RDS Access)
-  // ============================================================
-
-  // 1. GET MENU (For Customers & Admin)
   app.get('/api/menu', async (req, res) => {
     try {
       const result = await pool.query('SELECT * FROM menu_items ORDER BY id ASC');
