@@ -129,18 +129,20 @@ export async function registerRoutes(
   // ============================================================
 
   app.post("/api/reservations", async (req, res) => {
-    // 🔍 DEEP LOGGING FOR PM2
     console.log("================================================");
     console.log("📋 [RESERVATION] Incoming Request");
     console.log("🔐 Session ID:", req.sessionID?.substring(0, 10) + "...");
     console.log("✅ Is Authenticated:", req.isAuthenticated());
     console.log("👤 User from Session:", req.user);
+    console.log("📦 Request Body:", JSON.stringify(req.body, null, 2));
     console.log("================================================");
 
     try {
-
-      // 2. Parse Body
+      // Parse with Zod
       const input = insertReservationSchema.parse(req.body);
+      console.log("✅ Zod parsed input:", JSON.stringify(input, null, 2));
+      console.log("🔑 Input keys:", Object.keys(input));
+
       const reservation = await storage.createReservation(input);
 
       console.log("🎉 SUCCESS: Reservation created:", reservation.id);
@@ -154,6 +156,7 @@ export async function registerRoutes(
         });
       }
       console.error("❌ DB Error:", err);
+      console.error("❌ Full error object:", JSON.stringify(err, null, 2));
       res.status(500).json({ error: "Reservation failed" });
     }
   });

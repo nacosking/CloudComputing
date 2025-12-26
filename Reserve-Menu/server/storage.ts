@@ -153,14 +153,21 @@ export class DatabaseStorage implements IStorage {
 
   async createReservation(insertReservation: InsertReservation): Promise<Reservation> {
   // Insert only the fields from the schema
-  const [reservation] = await db.insert(reservations).values({
+  console.log("💾 [STORAGE] Attempting to insert reservation");
+  console.log("📦 Data received:", JSON.stringify(insertReservation, null, 2));
+    const dataToInsert = {
     name: insertReservation.name,
     email: insertReservation.email,
     date: insertReservation.date,
     time: insertReservation.time,
     guests: insertReservation.guests,
-    // createdAt, isPaid, qrUrl are auto-generated/default
-  }).returning();
+
+  };
+  console.log("📤 Data to insert into DB:", JSON.stringify(dataToInsert, null, 2));
+  console.log("🔑 Keys being inserted:", Object.keys(dataToInsert));
+  const [reservation] = await db.insert(reservations).values(dataToInsert).returning();
+
+  console.log("✅ Reservation inserted with ID:", reservation.id);
 
   // Generate QR code and upload to S3
   try {

@@ -26,7 +26,7 @@ export const reservations = pgTable("reservations", {
   time: text("time").notNull(),
   guests: integer("guests").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-  isPaid: boolean("is_paid").default(false),
+  isPaid: boolean("isPaid").default(false),
   qrUrl: text("qr_url"),
 });
 
