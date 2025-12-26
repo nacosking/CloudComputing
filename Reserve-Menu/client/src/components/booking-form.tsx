@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { CalendarIcon, CheckCircle2, User, Mail, Clock, Users } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
 import { useLocation } from "wouter";
 
+// 1. Define Schema (No userId required here)
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
   email: z.string().email("Invalid email address"),
@@ -29,49 +30,45 @@ export function BookingForm() {
   const [, navigate] = useLocation();
   const { user, addReservation } = useAuth();
 
-  const debugSession = (formData: any) => {
-    console.group("🔍 DEBUG: Reservation Submission");
-    console.log("Time:", new Date().toLocaleTimeString());
-    console.log("Current User Object:", user);
-    console.log("User ID to be sent:", user?.id);
-    console.log("Form Data:", formData);
-    console.groupEnd();
-
-    // Alert if ID is missing (Client-side check)
-    if (!user?.id) {
-      console.error("❌ CRITICAL: User ID is missing in Frontend!");
-    }
-  };
-
+  // 2. Initialize Form
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: user?.name || "",
-      email: user?.email || "",
+      name: "",
+      email: "",
     },
   });
 
+  // 3. AUTO-FILL FIX: Watch for 'user' changes and update form
+  // This ensures fields populate even if user loads 1 second after the page
+  useEffect(() => {
+    if (user) {
+      form.setValue("name", user.name);
+      form.setValue("email", user.email);
+    }
+  }, [user, form]);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // Prevent double submission
     if (isSubmitting) return;
 
     if (!user) {
       navigate("/login");
       return;
     }
-    debugSession(values);
+
     setIsSubmitting(true);
 
     try {
       const dateStr = format(values.date, "yyyy-MM-dd");
 
+      // 4. SUBMISSION FIX: Do NOT send userId here.
+      // The backend (server/routes.ts) will grab it from the secure session.
       await addReservation({
         name: values.name,
         email: values.email,
         date: dateStr,
         time: values.time,
         guests: parseInt(values.guests),
-        userId: user.id,
       });
 
       setIsSubmitted(true);
@@ -82,11 +79,11 @@ export function BookingForm() {
     } catch (error) {
       console.error("Reservation failed:", error);
       setIsSubmitting(false);
-      // Optionally show error to user
       alert("Failed to create reservation. Please try again.");
     }
   }
 
+  // --- Success View ---
   if (isSubmitted) {
     return (
       <motion.div
@@ -112,13 +109,13 @@ export function BookingForm() {
     );
   }
 
+  // --- Form View ---
   return (
     <div className="relative">
       {/* Background Glow */}
       <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl blur-2xl opacity-60" />
 
       <div className="relative bg-gradient-to-br from-card to-card/90 p-8 md:p-10 rounded-2xl shadow-2xl border border-primary/20">
-        {/* Header */}
         <div className="mb-8">
           <h3 className="font-serif text-3xl font-bold mb-2 text-foreground">Reserve Your Table</h3>
           <p className="text-foreground/70 text-sm">Complete your booking in just a few steps</p>
@@ -126,6 +123,7 @@ export function BookingForm() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            
             {/* Name & Email Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <FormField
