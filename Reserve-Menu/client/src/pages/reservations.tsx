@@ -1,4 +1,4 @@
-mport { useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
