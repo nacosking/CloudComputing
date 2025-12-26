@@ -8,10 +8,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
 import { Lock, CreditCard, Check } from "lucide-react";
-import { useState, useRef } from "react";
-import { QRCodeCanvas } from "qrcode.react";
+import { useState } from "react";
 import { format, parseISO } from "date-fns";
 
+// Simple validation schema for the demo payment
 const paymentSchema = z.object({
   cardName: z.string().min(2, "Name on card is required"),
   cardNumber: z.string().regex(/^\d{16}$/, "Card number must be 16 digits"),
@@ -29,12 +29,35 @@ export default function PaymentPage() {
     resolver: zodResolver(paymentSchema),
   });
 
-  // ------------------------------------------------------------------
-  // FIX: Check for Success FIRST
-  // We check this before checking (!lastReservation) because markReservationPaid()
-  // might clear the reservation data from context, but we still want to show
-  // the success screen.
-  // ------------------------------------------------------------------
+  const depositAmount = 50; // Fixed deposit amount
+
+  async function onSubmit(values: z.infer<typeof paymentSchema>) {
+    setIsProcessing(true);
+
+    try {
+      // 1. Simulate Payment Processing (2 seconds)
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // 2. Mark as paid in Context (Backend already handled the QR code)
+      if (lastReservation) {
+        markReservationPaid(lastReservation.id, "Paid via Credit Card");
+      }
+
+      // 3. Show Success Screen
+      setIsSuccess(true);
+
+      // 4. Redirect after delay
+      setTimeout(() => {
+        navigate("/reservations");
+      }, 3000);
+    } catch (err) {
+      console.error("Payment failed", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  // --- VIEW 1: SUCCESS SCREEN ---
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -43,7 +66,7 @@ export default function PaymentPage() {
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md w-full"
         >
-          <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-8 md:p-12 rounded-2xl border border-primary/20 text-center">
+          <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-8 md:p-12 rounded-2xl border border-primary/20 text-center shadow-2xl">
             <motion.div
               animate={{ scale: [1, 1.2, 1] }}
               transition={{ duration: 1, repeat: Infinity }}
@@ -54,9 +77,9 @@ export default function PaymentPage() {
               </div>
             </motion.div>
             <h2 className="font-serif text-3xl font-bold mb-3 text-foreground">Payment Successful!</h2>
-            <p className="text-foreground/70 mb-2">Deposit of $50.00 received</p>
+            <p className="text-foreground/70 mb-2">Deposit of ${depositAmount}.00 received</p>
             <p className="text-sm text-foreground/60 mb-6">
-              Your reservation is confirmed and your deposit has been secured.
+              Your reservation is confirmed. We look forward to serving you.
             </p>
             <p className="text-xs text-foreground/50 italic">
               Redirecting to your reservations...
@@ -67,133 +90,47 @@ export default function PaymentPage() {
     );
   }
 
-  // ------------------------------------------------------------------
-  // Check for missing reservation SECOND
-  // ------------------------------------------------------------------
+  // --- VIEW 2: MISSING DATA FALLBACK ---
+  // If user refreshes the page, lastReservation might be lost. 
+  // We redirect them instead of crashing.
   if (!lastReservation) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center">
-        <p className="text-muted-foreground mb-4">Finalizing reservation details...</p>
-        <Button onClick={() => navigate("/")}>Return Home</Button>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4 text-center">
+        <h2 className="text-xl font-bold text-foreground">No Pending Payment</h2>
+        <p className="text-muted-foreground">It looks like you don't have an active reservation process.</p>
+        <Button onClick={() => navigate("/reservations")} variant="outline">
+          Check My Reservations
+        </Button>
       </div>
     );
   }
 
   const reservation = lastReservation;
-  const depositAmount = 50; // Fixed deposit amount in USD
 
-  // Ref for hidden QR code canvas
-  const qrRef = useRef<HTMLDivElement>(null);
-
-  async function onSubmit(values: z.infer<typeof paymentSchema>) {
-    setIsProcessing(true);
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Generate QR code data with reservation details
-    const qrData = JSON.stringify({
-      reservationId: reservation.id,
-      name: reservation.name,
-      date: reservation.date,
-      time: reservation.time,
-      guests: reservation.guests,
-      email: reservation.email,
-      paid: true,
-      paidAt: new Date().toISOString(),
-    });
-
-    // Render QR code to hidden canvas and extract image
-    // Wait for next tick to ensure QR is rendered
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    let qrImageUrl = null;
-    if (qrRef.current) {
-      const canvas = qrRef.current.querySelector('canvas');
-      if (canvas) {
-        qrImageUrl = canvas.toDataURL('image/png');
-      }
-    }
-
-    // Upload QR image to backend if needed
-    let qrImageS3Url = null;
-    if (qrImageUrl) {
-      try {
-        const blob = await (await fetch(qrImageUrl)).blob();
-        const formData = new FormData();
-        formData.append('file', blob, `qr_${reservation.id}.png`);
-        formData.append('reservationId', String(reservation.id));
-        
-        // Adjust endpoint as needed
-        const uploadRes = await fetch('/api/upload-qr', {
-          method: 'POST',
-          body: formData,
-        });
-        if (uploadRes.ok) {
-          const data = await uploadRes.json();
-          qrImageS3Url = data.url;
-        }
-      } catch (err) {
-        // Handle upload error
-        console.error('QR upload failed', err);
-      }
-    }
-
-    // Save S3 URL or fallback to qrData string
-    markReservationPaid(reservation.id, qrImageS3Url || qrData);
-    setIsProcessing(false);
-    setIsSuccess(true);
-
-    setTimeout(() => {
-      navigate("/reservations");
-    }, 2500);
-  }
-
+  // --- VIEW 3: PAYMENT FORM ---
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted py-12 px-4">
-      {/* Hidden QR code for image extraction */}
-      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }} ref={qrRef} aria-hidden="true">
-        <QRCodeCanvas
-          value={JSON.stringify({
-            reservationId: reservation.id,
-            name: reservation.name,
-            date: reservation.date,
-            time: reservation.time,
-            guests: reservation.guests,
-            email: reservation.email,
-            paid: true,
-            paidAt: new Date().toISOString(),
-          })}
-          size={256}
-          level="H"
-          includeMargin={true}
-          bgColor="#ffffff"
-          fgColor="#000000"
-        />
-      </div>
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-8 text-center md:text-left"
         >
           <h1 className="font-serif text-4xl font-bold mb-2 text-foreground">Secure Deposit</h1>
-          <p className="text-foreground/70">Complete your reservation with a ${depositAmount} deposit</p>
+          <p className="text-foreground/70">Complete your booking for <strong>Lumière Bistro</strong></p>
         </motion.div>
 
         <div className="grid md:grid-cols-2 gap-8">
-          {/* Left: Order Summary */}
+          {/* LEFT COLUMN: Order Summary */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-card rounded-2xl p-6 border border-primary/20"
+            className="bg-card rounded-2xl p-6 border border-primary/20 shadow-sm h-fit"
           >
             <h2 className="font-serif text-2xl font-bold mb-6 text-foreground">Reservation Summary</h2>
 
             <div className="space-y-4 mb-6 p-4 bg-primary/5 rounded-lg border border-primary/10">
-              <div className="flex justify-between">
-                <span className="text-foreground/70">Restaurant</span>
-                <span className="font-semibold text-foreground">Lumière Bistro</span>
-              </div>
               <div className="flex justify-between">
                 <span className="text-foreground/70">Date</span>
                 <span className="font-semibold text-foreground">
@@ -205,8 +142,8 @@ export default function PaymentPage() {
                 <span className="font-semibold text-foreground">{reservation.time}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-foreground/70">Party Size</span>
-                <span className="font-semibold text-foreground">{reservation.guests} {reservation.guests === 1 ? "Guest" : "Guests"}</span>
+                <span className="text-foreground/70">Guests</span>
+                <span className="font-semibold text-foreground">{reservation.guests} People</span>
               </div>
               <div className="border-t border-primary/10 pt-4 flex justify-between">
                 <span className="text-foreground/70">Name</span>
@@ -217,16 +154,16 @@ export default function PaymentPage() {
             {/* Pricing */}
             <div className="space-y-3 border-t border-primary/20 pt-6">
               <div className="flex justify-between text-lg">
-                <span className="text-foreground">Deposit</span>
+                <span className="text-foreground">Total Deposit</span>
                 <span className="font-bold text-primary text-xl">${depositAmount}.00</span>
               </div>
               <p className="text-xs text-foreground/60 italic">
-                💡 This deposit will be applied to your final bill. The remaining balance will be due on the day of your reservation.
+                * This deposit will be deducted from your final bill.
               </p>
             </div>
           </motion.div>
 
-          {/* Right: Payment Form */}
+          {/* RIGHT COLUMN: Payment Form */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -247,12 +184,7 @@ export default function PaymentPage() {
                     <FormItem>
                       <FormLabel>Name on Card</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="John Doe"
-                          {...field}
-                          disabled={isProcessing}
-                          className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11"
-                        />
+                        <Input placeholder="John Doe" {...field} disabled={isProcessing} className="bg-background/80" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -274,7 +206,7 @@ export default function PaymentPage() {
                           {...field}
                           disabled={isProcessing}
                           maxLength={16}
-                          className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11 font-mono"
+                          className="bg-background/80 font-mono"
                         />
                       </FormControl>
                       <FormMessage />
@@ -295,7 +227,7 @@ export default function PaymentPage() {
                             {...field}
                             disabled={isProcessing}
                             maxLength={5}
-                            className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11 font-mono"
+                            className="bg-background/80 font-mono"
                           />
                         </FormControl>
                         <FormMessage />
@@ -315,7 +247,7 @@ export default function PaymentPage() {
                             {...field}
                             disabled={isProcessing}
                             maxLength={4}
-                            className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11 font-mono"
+                            className="bg-background/80 font-mono"
                           />
                         </FormControl>
                         <FormMessage />
@@ -327,33 +259,22 @@ export default function PaymentPage() {
                 <div className="p-3 bg-primary/5 rounded-lg border border-primary/10 flex items-start gap-3">
                   <Lock className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                   <p className="text-xs text-foreground/70">
-                    Your payment information is encrypted and secure. We never store your full card details.
+                    Secure 256-bit encryption. We never store your card details.
                   </p>
                 </div>
 
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <Button
-                    type="submit"
-                    disabled={isProcessing}
-                    className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground rounded-lg shadow-lg"
-                  >
-                    {isProcessing ? (
-                      <motion.span
-                        animate={{ opacity: [1, 0.5, 1] }}
-                        transition={{ duration: 1, repeat: Infinity }}
-                      >
-                        Processing...
-                      </motion.span>
-                    ) : (
-                      `Pay $${depositAmount}.00 Deposit`
-                    )}
-                  </Button>
-                </motion.div>
+                <Button
+                  type="submit"
+                  disabled={isProcessing}
+                  className="w-full h-12 text-lg font-serif bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg transition-all"
+                >
+                  {isProcessing ? "Processing..." : `Pay $${depositAmount}.00 Deposit`}
+                </Button>
               </form>
             </Form>
-
-            <p className="text-center text-xs text-foreground/60 mt-6">
-              💳 Use card number <span className="font-mono">4111111111111111</span> for demo
+            
+            <p className="text-center text-xs text-foreground/50 mt-4">
+              Demo Mode: Use card <strong>4111111111111111</strong>
             </p>
           </motion.div>
         </div>
