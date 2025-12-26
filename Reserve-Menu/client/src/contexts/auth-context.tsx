@@ -1,91 +1,140 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 export interface User {
-  id: string;
+  id: number;
+  username: string;
   name: string;
   email: string;
+  isAdmin?: boolean;
 }
 
 export interface Reservation {
-  id: string;
-  userId: string;
+  id: number;
+  userId?: number;
   name: string;
   email: string;
+  phone?: string;
   date: string;
   time: string;
   guests: number;
-  createdAt: string;
-  paid?: boolean;
-  qrCode?: string;
+  status: string;
+  qrUrl?: string;
+  createdAt?: string;
 }
 
 interface AuthContextType {
   user: User | null;
+  isLoading: boolean;
   reservations: Reservation[];
   lastReservation: Reservation | null;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-  addReservation: (reservation: Omit<Reservation, "id" | "userId" | "createdAt">) => Reservation;
-  cancelReservation: (reservationId: string) => void;
-  markReservationPaid: (reservationId: string, qrCodeData?: string) => void;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<void>;
+  addReservation: (reservation: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">) => Promise<Reservation>;
+  fetchReservations: () => Promise<void>;
+}
+
+interface RegisterData {
+  username: string;
+  name: string;
+  email: string;
+  password: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [lastReservation, setLastReservation] = useState<Reservation | null>(null);
 
-  // Load from localStorage on mount
+  // Check authentication status on mount
   useEffect(() => {
-    const storedUser = localStorage.getItem("lumiere_user");
-    const storedReservations = localStorage.getItem("lumiere_reservations");
-
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    if (storedReservations) {
-      // Map qrUrl to qrCode for all reservations loaded from storage
-      const parsed = JSON.parse(storedReservations);
-      setReservations(parsed.map((r: any) => ({ ...r, qrCode: r.qrCode || r.qrUrl })));
-    }
+    checkAuth();
   }, []);
 
-  // Save reservations to localStorage whenever they change
+  // Fetch reservations when user logs in
   useEffect(() => {
-    localStorage.setItem("lumiere_reservations", JSON.stringify(reservations));
-  }, [reservations]);
+    if (user) {
+      fetchReservations();
+    } else {
+      setReservations([]);
+    }
+  }, [user]);
 
-  const login = async (email: string, password: string) => {
-    // Mock authentication - in real app, this would call a backend
-    if (!email || password.length < 1) {
-      throw new Error("Invalid credentials");
+  async function checkAuth() {
+    try {
+      const res = await fetch("/api/user", {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const userData = await res.json();
+        setUser(userData);
+      }
+    } catch (err) {
+      console.error("Auth check failed:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function login(email: string, password: string) {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.message || "Login failed");
     }
 
-    const mockUser: User = {
-      id: `user_${Date.now()}`,
-      name: email.split("@")[0],
-      email,
-    };
+    const userData = await res.json();
+    setUser(userData);
+  }
 
-    setUser(mockUser);
-    localStorage.setItem("lumiere_user", JSON.stringify(mockUser));
-  };
+  async function register(data: RegisterData) {
+    const res = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+      credentials: "include",
+    });
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("lumiere_user");
-  };
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.message || "Registration failed");
+    }
 
-  // Look for this in src/contexts/auth-context.tsx
-  const addReservation = async (reservationData) => {
+    const userData = await res.json();
+    setUser(userData);
+  }
+
+  async function logout() {
+    const res = await fetch("/api/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+
+    if (res.ok) {
+      setUser(null);
+      setReservations([]);
+      setLastReservation(null);
+    }
+  }
+
+  async function addReservation(reservationData: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">): Promise<Reservation> {
     try {
       const response = await fetch("/api/reservations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify(reservationData),
       });
 
@@ -93,32 +142,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("Failed to save reservation");
       }
 
-      // Map qrUrl to qrCode for the new reservation
       const savedReservation = await response.json();
-      const mappedReservation = { ...savedReservation, qrCode: savedReservation.qrCode || savedReservation.qrUrl };
-      setLastReservation(mappedReservation);
-      setReservations((prev) => [...prev, mappedReservation]);
-      return mappedReservation;
+      setLastReservation(savedReservation);
+      setReservations((prev) => [...prev, savedReservation]);
+      return savedReservation;
     } catch (error) {
       console.error("Error saving reservation:", error);
       throw error;
     }
-  };
+  }
 
-  const cancelReservation = (reservationId: string) => {
-    setReservations(reservations.filter((res) => res.id !== reservationId));
-  };
+  async function fetchReservations() {
+    try {
+      const response = await fetch("/api/reservations", {
+        credentials: "include",
+      });
 
-  const markReservationPaid = (reservationId: string, qrCodeData?: string) => {
-    setReservations(
-      reservations.map((res) =>
-        res.id === reservationId ? { ...res, paid: true, qrCode: qrCodeData } : res
-      )
-    );
-  };
+      if (response.ok) {
+        const data = await response.json();
+        setReservations(data);
+      }
+    } catch (error) {
+      console.error("Error fetching reservations:", error);
+    }
+  }
 
   return (
-    <AuthContext.Provider value={{ user, reservations, lastReservation, login, logout, addReservation, cancelReservation, markReservationPaid }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        isLoading,
+        reservations, 
+        lastReservation, 
+        login, 
+        register,
+        logout, 
+        checkAuth,
+        addReservation,
+        fetchReservations
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/auth-context";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -25,7 +26,8 @@ const registerSchema = z.object({
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
-  const { login } = useAuth(); // Assuming login and basic auth from the context
+  const { login, register, user, isLoading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
@@ -40,18 +42,38 @@ export default function LoginPage() {
     defaultValues: { username: "", password: "", name: "", email: "" },
   });
 
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (user.isAdmin) {
+        navigate("/admin/menu");
+      } else {
+        navigate("/reservations");
+      }
+    }
+  }, [user, authLoading, navigate]);
+
   async function onLogin(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
     setError("");
     try {
       await login(values.email, values.password);
-      if (values.email.toLowerCase() === "admin@lumiere.com") {
-        navigate("/admin/menu");
-      } else {
-        navigate("/reservations");
-      }
+      
+      toast({ 
+        title: "Welcome back!", 
+        description: "You've been successfully logged in.",
+      });
+
+      // Navigation will be handled by useEffect above
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const errorMessage = err instanceof Error ? err.message : "Login failed";
+      setError(errorMessage);
+      toast({
+        title: "Login failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -61,14 +83,38 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
     try {
-      // In a real app, you'd have a register method. For now, we simulate success via login.
-      await login(values.email, values.password);
-      navigate("/reservations");
+      await register(values);
+      
+      toast({ 
+        title: "Account created!", 
+        description: "Welcome to Lumière! You've been automatically logged in.",
+      });
+
+      // Navigation will be handled by useEffect above
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      const errorMessage = err instanceof Error ? err.message : "Registration failed";
+      setError(errorMessage);
+      toast({
+        title: "Registration failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
+  }
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+          <p className="mt-4 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -123,7 +169,15 @@ export default function LoginPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Email Address</FormLabel>
-                              <FormControl><Input placeholder="you@example.com" {...field} disabled={isLoading} className="h-11" /></FormControl>
+                              <FormControl>
+                                <Input 
+                                  placeholder="you@example.com" 
+                                  {...field} 
+                                  disabled={isLoading} 
+                                  className="h-11"
+                                  autoComplete="email"
+                                />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -134,15 +188,30 @@ export default function LoginPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Password</FormLabel>
-                              <FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isLoading} className="h-11" /></FormControl>
+                              <FormControl>
+                                <Input 
+                                  type="password" 
+                                  placeholder="••••••••" 
+                                  {...field} 
+                                  disabled={isLoading} 
+                                  className="h-11"
+                                  autoComplete="current-password"
+                                />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                         {error && activeTab === "login" && (
-                          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">{error}</div>
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+                            {error}
+                          </div>
                         )}
-                        <Button type="submit" className="w-full h-11 text-lg bg-primary hover:bg-primary/90" disabled={isLoading}>
+                        <Button 
+                          type="submit" 
+                          className="w-full h-11 text-lg bg-primary hover:bg-primary/90" 
+                          disabled={isLoading}
+                        >
                           {isLoading ? "Signing in..." : "Sign In"}
                         </Button>
                       </form>
@@ -166,7 +235,15 @@ export default function LoginPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Full Name</FormLabel>
-                              <FormControl><Input placeholder="John Doe" {...field} disabled={isLoading} className="h-11" /></FormControl>
+                              <FormControl>
+                                <Input 
+                                  placeholder="John Doe" 
+                                  {...field} 
+                                  disabled={isLoading} 
+                                  className="h-11"
+                                  autoComplete="name"
+                                />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -177,7 +254,16 @@ export default function LoginPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Email</FormLabel>
-                              <FormControl><Input type="email" placeholder="john@example.com" {...field} disabled={isLoading} className="h-11" /></FormControl>
+                              <FormControl>
+                                <Input 
+                                  type="email" 
+                                  placeholder="john@example.com" 
+                                  {...field} 
+                                  disabled={isLoading} 
+                                  className="h-11"
+                                  autoComplete="email"
+                                />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -188,7 +274,15 @@ export default function LoginPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Username</FormLabel>
-                              <FormControl><Input placeholder="johndoe" {...field} disabled={isLoading} className="h-11" /></FormControl>
+                              <FormControl>
+                                <Input 
+                                  placeholder="johndoe" 
+                                  {...field} 
+                                  disabled={isLoading} 
+                                  className="h-11"
+                                  autoComplete="username"
+                                />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -199,15 +293,30 @@ export default function LoginPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Password</FormLabel>
-                              <FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isLoading} className="h-11" /></FormControl>
+                              <FormControl>
+                                <Input 
+                                  type="password" 
+                                  placeholder="••••••••" 
+                                  {...field} 
+                                  disabled={isLoading} 
+                                  className="h-11"
+                                  autoComplete="new-password"
+                                />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                         {error && activeTab === "register" && (
-                          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">{error}</div>
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+                            {error}
+                          </div>
                         )}
-                        <Button type="submit" className="w-full h-11 text-lg bg-primary hover:bg-primary/90" disabled={isLoading}>
+                        <Button 
+                          type="submit" 
+                          className="w-full h-11 text-lg bg-primary hover:bg-primary/90" 
+                          disabled={isLoading}
+                        >
                           {isLoading ? "Creating account..." : "Create Account"}
                         </Button>
                       </form>
@@ -224,7 +333,7 @@ export default function LoginPage() {
             onClick={() => navigate("/")}
             className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
           >
-            Back to Home
+            ← Back to Home
           </button>
         </div>
       </motion.div>

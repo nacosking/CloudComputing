@@ -1,7 +1,7 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
-import { setupAuth } from "./auth";
+import { setupAuth, hashPassword } from "./auth";
 import { insertReservationSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -10,11 +10,10 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // 1. Setup Authentication
+  // 1. Setup Session Auth (Passport.js) - This also registers the auth routes
   setupAuth(app);
 
   // 2. Automated Startup: Seed the database if empty
-  // This ensures data is always there on the first visit
   (async () => {
     try {
       await seedDatabase();
@@ -24,7 +23,7 @@ export async function registerRoutes(
   })();
 
   // ============================================================
-  //   DYNAMIC MENU ROUTES (Using Unified Storage)
+  //   MENU ROUTES
   // ============================================================
 
   // GET MENU: Fetches items and categories in one go
@@ -32,7 +31,11 @@ export async function registerRoutes(
     try {
       const items = await storage.getMenuItemsWithCategories();
 
-      const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
+      const menuData: Record<string, any[]> = { 
+        breakfast: [], 
+        lunch: [], 
+        dinner: [] 
+      };
       
       items.forEach(item => {
         let catName = item.categoryName ? item.categoryName.toLowerCase() : 'uncategorized';
@@ -54,28 +57,28 @@ export async function registerRoutes(
     }
   });
 
-  // ADD ITEM: Uses storage method instead of raw SQL
-  app.post('/api/menu', async (req, res) => {
+  // Get all menu items (for admin panel)
+  app.get("/api/menu-items", async (_req, res) => {
     try {
-      // First, we find the category ID based on the name sent from frontend
-      const cats = await storage.getCategories();
-      const category = cats.find(c => 
-        c.slug === req.body.category.toLowerCase() || 
-        c.name === req.body.category
-      );
+      const items = await storage.getMenuItems();
+      res.json(items);
+    } catch (err) {
+      console.error("Menu Items Fetch Error:", err);
+      res.status(500).json({ error: 'Failed to fetch menu items' });
+    }
+  });
 
-      if (!category) {
-        return res.status(400).json({ error: "Invalid category" });
-      }
-
+  // Add menu item
+  app.post('/api/menu-items', async (req, res) => {
+    try {
       const newItem = await storage.createMenuItem({
-        categoryId: category.id,
+        categoryId: req.body.categoryId,
         name: req.body.name,
         price: parseInt(req.body.price),
-        description: req.body.description,
-        available: true
+        description: req.body.description || "",
+        available: req.body.available !== undefined ? req.body.available : true,
+        imageUrl: req.body.imageUrl || ""
       });
-
       res.json(newItem);
     } catch (err) {
       console.error("Add Item Error:", err);
@@ -83,30 +86,46 @@ export async function registerRoutes(
     }
   });
 
-  // UPDATE ITEM
-  app.put('/api/menu/:id', async (req, res) => {
+  // Update menu item
+  app.patch('/api/menu-items/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const updated = await storage.updateMenuItem(id, req.body);
       res.json(updated);
     } catch (err) {
+      console.error("Update Item Error:", err);
       res.status(500).json({ error: 'Update failed' });
     }
   });
 
-  // DELETE ITEM
-  app.delete('/api/menu/:id', async (req, res) => {
+  // Delete menu item
+  app.delete('/api/menu-items/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteMenuItem(id);
       res.json({ message: 'Deleted successfully' });
     } catch (err) {
+      console.error("Delete Item Error:", err);
       res.status(500).json({ error: 'Delete failed' });
     }
   });
 
   // ============================================================
-  //   RESERVATIONS & CATEGORIES
+  //   CATEGORY ROUTES
+  // ============================================================
+
+  app.get("/api/categories", async (_req, res) => {
+    try {
+      const categories = await storage.getCategories();
+      res.json(categories);
+    } catch (err) {
+      console.error("Categories Fetch Error:", err);
+      res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+  });
+
+  // ============================================================
+  //   RESERVATION ROUTES
   // ============================================================
 
   app.post("/api/reservations", async (req, res) => {
@@ -121,43 +140,141 @@ export async function registerRoutes(
           field: err.errors[0].path.join('.'),
         });
       }
+      console.error("Reservation Error:", err);
       res.status(500).json({ error: "Reservation failed" });
     }
   });
 
-  app.get("/api/categories", async (_req, res) => {
-    const categories = await storage.getCategories();
-    res.json(categories);
+  app.get("/api/reservations", async (req, res) => {
+    try {
+      if (req.isAuthenticated()) {
+        const user = req.user as any;
+        if (user.isAdmin) {
+          // Admin sees all reservations
+          const reservations = await storage.getReservations();
+          res.json(reservations);
+        } else {
+          // Regular user sees only their reservations
+          const reservations = await storage.getReservationsByEmail(user.email);
+          res.json(reservations);
+        }
+      } else {
+        res.status(401).json({ message: "Not authenticated" });
+      }
+    } catch (err) {
+      console.error("Get Reservations Error:", err);
+      res.status(500).json({ error: "Failed to fetch reservations" });
+    }
   });
 
   return httpServer;
 }
 
-// Optimized Seed Function
+// ============================================================
+//   DATABASE SEEDING
+// ============================================================
 export async function seedDatabase() {
   const categories = await storage.getCategories();
+  
   if (categories.length === 0) {
-    console.log("Seeding Database...");
-    const starters = await storage.createCategory({ name: "Starters", slug: "starters" });
-    const mains = await storage.createCategory({ name: "Mains", slug: "mains" });
-    const desserts = await storage.createCategory({ name: "Desserts", slug: "desserts" });
+    console.log("🌱 Seeding Database...");
+    
+    // Create categories
+    const starters = await storage.createCategory({ 
+      name: "Starters", 
+      slug: "starters" 
+    });
+    const mains = await storage.createCategory({ 
+      name: "Mains", 
+      slug: "mains" 
+    });
+    const desserts = await storage.createCategory({ 
+      name: "Desserts", 
+      slug: "desserts" 
+    });
 
+    console.log("✅ Categories created");
+
+    // Create default admin user
+    try {
+      const existingAdmin = await storage.getUserByEmail("admin@lumiere.com");
+      if (!existingAdmin) {
+        const hashedPassword = await hashPassword("admin123");
+        await storage.createUser({
+          username: "admin",
+          name: "Admin User",
+          email: "admin@lumiere.com",
+          password: hashedPassword,
+          isAdmin: true
+        });
+        console.log("✅ Admin user created");
+        console.log("   📧 Email: admin@lumiere.com");
+        console.log("   🔑 Password: admin123");
+      } else {
+        console.log("ℹ️  Admin user already exists");
+      }
+    } catch (err) {
+      console.error("❌ Error creating admin:", err);
+    }
+
+    // Create sample menu items
     await storage.createMenuItem({ 
       categoryId: starters.id, 
       name: "Bruschetta", 
-      description: "Grilled bread with tomatoes and basil", 
+      description: "Grilled bread with fresh tomatoes, basil, and olive oil", 
       price: 800, 
-      available: true 
+      available: true,
+      imageUrl: ""
     });
-    
+
+    await storage.createMenuItem({ 
+      categoryId: starters.id, 
+      name: "Caesar Salad", 
+      description: "Crisp romaine lettuce with parmesan and croutons", 
+      price: 1200, 
+      available: true,
+      imageUrl: ""
+    });
+
     await storage.createMenuItem({ 
       categoryId: mains.id, 
       name: "Grilled Salmon", 
-      description: "Fresh atlantic salmon with herbs", 
+      description: "Fresh Atlantic salmon with herbs and lemon butter", 
       price: 2400, 
-      available: true 
+      available: true,
+      imageUrl: ""
+    });
+
+    await storage.createMenuItem({ 
+      categoryId: mains.id, 
+      name: "Beef Tenderloin", 
+      description: "Premium beef with roasted vegetables", 
+      price: 3200, 
+      available: true,
+      imageUrl: ""
+    });
+
+    await storage.createMenuItem({ 
+      categoryId: desserts.id, 
+      name: "Tiramisu", 
+      description: "Classic Italian coffee-flavored dessert", 
+      price: 900, 
+      available: true,
+      imageUrl: ""
+    });
+
+    await storage.createMenuItem({ 
+      categoryId: desserts.id, 
+      name: "Chocolate Lava Cake", 
+      description: "Warm chocolate cake with molten center", 
+      price: 1100, 
+      available: true,
+      imageUrl: ""
     });
     
-    console.log("Seed completed!");
+    console.log("✅ Sample menu items created");
+    console.log("🎉 Database seed completed!");
+  } else {
+    console.log("ℹ️  Database already seeded");
   }
 }
