@@ -27,7 +27,7 @@ interface RegisterData {
   password: string;
 }
 
-// ✅ UPDATED: Added markReservationPaid to the interface
+// ✅ 1. Added markReservationPaid to the definition here
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -65,9 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function checkAuth() {
     try {
-      const res = await fetch("/api/user", {
-        credentials: "include",
-      });
+      const res = await fetch("/api/user", { credentials: "include" });
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
@@ -94,7 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const error = await res.json();
       throw new Error(error.message || "Login failed");
     }
-
     const userData = await res.json();
     setUser(userData);
   }
@@ -111,17 +108,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const error = await res.json();
       throw new Error(error.message || "Registration failed");
     }
-
     const userData = await res.json();
     setUser(userData);
   }
 
   async function logout() {
     try {
-      await fetch("/api/logout", {
-        method: "POST",
-        credentials: "include"
-      });
+      await fetch("/api/logout", { method: "POST", credentials: "include" });
     } catch (e) {
       console.error("Logout error:", e);
     }
@@ -131,28 +124,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function addReservation(reservationData: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">): Promise<Reservation> {
-    console.log("🎯 [AUTH-CONTEXT] Starting reservation submission");
-    try {
-      const response = await fetch("/api/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(reservationData),
-      });
+    const response = await fetch("/api/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(reservationData),
+    });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to save reservation");
-      }
-
-      const savedReservation = await response.json();
-      setLastReservation(savedReservation);
-      setReservations((prev) => [...prev, savedReservation]);
-      return savedReservation;
-    } catch (error) {
-      console.error("❌ Reservation submission error:", error);
-      throw error;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to save reservation");
     }
+
+    const savedReservation = await response.json();
+    setLastReservation(savedReservation);
+    setReservations((prev) => [...prev, savedReservation]);
+    return savedReservation;
   }
 
   async function fetchReservations() {
@@ -171,20 +158,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setReservations((prev) => prev.filter((r) => r.id.toString() !== id));
   }
 
-  // ✅ ADDED: The missing function that caused the freeze
+  // ✅ 2. THIS IS THE MISSING FUNCTION CAUSING THE FREEZE
   function markReservationPaid(id: number, qrData: string) {
-    // Update local state so UI updates immediately
+    console.log(`Checking off payment for reservation ${id}`);
+
+    // Update the list of reservations
     setReservations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, isPaid: true, qrUrl: qrData } : r))
     );
 
+    // Update the "current" reservation so the payment page knows it is done
     if (lastReservation && lastReservation.id === id) {
       setLastReservation({ ...lastReservation, isPaid: true, qrUrl: qrData });
     }
-
-    // NOTE: In a real app, you would fetch('/api/reservations/'+id+'/pay') here
-    // to update the database. For now, this updates the frontend state.
-    console.log(`Reservation ${id} marked as paid.`);
   }
 
   return (
@@ -201,7 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         addReservation,
         fetchReservations,
         cancelReservation,
-        markReservationPaid, // ✅ Included in provider
+        markReservationPaid, // ✅ 3. Exported here
       }}
     >
       {children}
