@@ -29,19 +29,6 @@ export function BookingForm() {
   const [, navigate] = useLocation();
   const { user, addReservation } = useAuth();
 
-  const debugSession = (formData: any) => {
-    console.group("🔍 DEBUG: Reservation Submission");
-    console.log("Time:", new Date().toLocaleTimeString());
-    console.log("Current User Object:", user);
-    console.log("User ID to be sent:", user?.id);
-    console.log("Form Data:", formData);
-    console.groupEnd();
-
-    // Alert if ID is missing (Client-side check)
-    if (!user?.id) {
-      console.error("❌ CRITICAL: User ID is missing in Frontend!");
-    }
-  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -59,7 +46,6 @@ export function BookingForm() {
       navigate("/login");
       return;
     }
-    debugSession(values);
     setIsSubmitting(true);
 
     try {

@@ -141,12 +141,6 @@ export async function registerRoutes(
 
       // 2. Parse Body
       const input = insertReservationSchema.parse(req.body);
-
-      // ✅ FIX: REMOVED USERID INJECTION
-      // Since you dropped the user_id column from the DB, we cannot save this.
-      // (input as any).userId = user.id; <--- DELETED THIS LINE
-
-      // 3. Save to DB
       const reservation = await storage.createReservation(input);
 
       console.log("🎉 SUCCESS: Reservation created:", reservation.id);
