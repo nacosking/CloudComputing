@@ -29,10 +29,8 @@ export async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
-  // ✅ CRITICAL: Set trust proxy BEFORE setting up sessions
-  if (app.get("env") === "production") {
-    app.set("trust proxy", 1);
-  }
+  // ✅ FIXED: Always trust proxy on AWS so cookies work behind the Load Balancer
+  app.set("trust proxy", 1);
 
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "r8q/+&1LM3)Cd*zAGpx1xm{NeQHc;#",
@@ -40,16 +38,17 @@ export function setupAuth(app: Express) {
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      // ✅ FIXED: Only use secure cookies in production with HTTPS
-      secure: app.get("env") === "production" && process.env.USE_HTTPS === "true",
+      // ✅ FIXED: Force secure to FALSE.
+      // This is critical because your site is accessed via http:// (not https yet).
+      // Without this, the browser throws away the cookie immediately.
+      secure: false,
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      sameSite: app.get("env") === "production" ? "lax" : "lax", // ✅ FIXED: Changed from 'strict'
+      sameSite: "lax",
     }
   };
 
-  console.log("🔐 Session config:", {
-    env: app.get("env"),
+  console.log("🔐 Session config applied:", {
     secure: sessionSettings.cookie?.secure,
     sameSite: sessionSettings.cookie?.sameSite,
     trustProxy: app.get("trust proxy")
@@ -59,7 +58,7 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // ✅ ADDED: Middleware to log session status
+  // ✅ ADDED: Middleware to log session status for debugging
   app.use((req, res, next) => {
     console.log("📋 Session check:", {
       path: req.path,
@@ -70,7 +69,7 @@ export function setupAuth(app: Express) {
     next();
   });
 
-  // Configure Passport Local Strategy - Login with USERNAME (not email)
+  // Configure Passport Local Strategy
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
@@ -109,36 +108,30 @@ export function setupAuth(app: Express) {
   // Register endpoint
   app.post("/api/register", async (req, res, next) => {
     try {
-      // Check if username already exists
       const existingUsername = await storage.getUserByUsername(req.body.username);
       if (existingUsername) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      // Check if email already exists
       const existingEmail = await storage.getUserByEmail(req.body.email);
       if (existingEmail) {
         return res.status(400).json({ message: "Email already exists" });
       }
 
-      // Hash password
       const hashedPassword = await hashPassword(req.body.password);
 
-      // Create user with admin check
       const user = await storage.createUser({
         ...req.body,
         password: hashedPassword,
         isAdmin: req.body.email === "admin@lumiere.com",
       });
 
-      // Auto-login after registration
       req.login(user, (err) => {
         if (err) {
           console.error("❌ Login after register failed:", err);
           return next(err);
         }
         console.log("✅ User registered and logged in:", user.id);
-        // Return user without password
         const { password: _, ...safeUser } = user;
         res.status(201).json(safeUser);
       });
@@ -151,13 +144,11 @@ export function setupAuth(app: Express) {
   // Login endpoint
   app.post("/api/login", async (req, res, next) => {
     try {
-      // Try to find user by email first, then use their username for passport
       const user = await storage.getUserByEmail(req.body.email);
       if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Now authenticate with the username
       passport.authenticate("local", (err: any, authenticatedUser: any, info: any) => {
         if (err) {
           console.error("❌ Auth error:", err);
@@ -175,7 +166,7 @@ export function setupAuth(app: Express) {
           }
           console.log("✅ User logged in successfully:", authenticatedUser.id);
           console.log("✅ Session ID:", req.sessionID?.substring(0, 8) + "...");
-          // Return user without password
+
           const { password: _, ...safeUser } = authenticatedUser;
           res.status(200).json(safeUser);
         });
@@ -210,7 +201,6 @@ export function setupAuth(app: Express) {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
-    // Return user without password
     const { password: _, ...safeUser } = req.user as SelectUser;
     res.json(safeUser);
   });
