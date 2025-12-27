@@ -125,29 +125,27 @@ export async function registerRoutes(
   });
 
   // ============================================================
-  //   RESERVATION ROUTES
+  //   RESERVATION ROUTES (Corrected & Deduplicated)
   // ============================================================
 
   app.post("/api/reservations", async (req, res) => {
     try {
-      // 1. Validate the form data (Date, Time, Guests, etc.)
+      // 1. Validate the form data
       const input = insertReservationSchema.parse(req.body);
 
-      // 2. ✅ CRITICAL FIX: Link to the Logged-in User
+      // 2. Link to the Logged-in User if authenticated
       if (req.isAuthenticated() && req.user) {
         const user = req.user as any;
 
         // Force the reservation to belong to this user
         (input as any).userId = user.id;
 
-        // OPTIONAL: Force the email to match the account email.
-        // This ensures "getReservationsByEmail" always finds it.
+        // Force the email/name to match the account
         (input as any).email = user.email;
         (input as any).name = user.name;
       }
 
       const reservation = await storage.createReservation(input);
-
       console.log("🎉 Reservation created for User ID:", (input as any).userId || "Guest");
       res.status(201).json(reservation);
     } catch (err) {
@@ -162,25 +160,7 @@ export async function registerRoutes(
     }
   });
 
-  // GET user's reservations (requires authentication)
-  app.get("/api/reservations", async (req, res) => {
-    try {
-      if (!req.isAuthenticated() || !req.user) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      const user = req.user as any;
-
-      // Fetch by email (Since we now force the email in POST, this is safe)
-      const userReservations = await storage.getReservationsByEmail(user.email);
-      res.json(userReservations);
-    } catch (err) {
-      console.error("Fetch Reservations Error:", err);
-      res.status(500).json({ error: "Failed to fetch reservations" });
-    }
-  });
-
-  // GET user's reservations (requires authentication)
+  // GET user's reservations
   app.get("/api/reservations", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user) {
@@ -200,7 +180,7 @@ export async function registerRoutes(
 }
 
 // ============================================================
-//   DATABASE SEEDING (Outside the main function)
+//   DATABASE SEEDING
 // ============================================================
 export async function seedDatabase() {
   const categories = await storage.getCategories();
@@ -208,12 +188,14 @@ export async function seedDatabase() {
   if (categories.length === 0) {
     console.log("🌱 Seeding Database...");
 
-    const starters = await storage.createCategory({ name: "Starters", slug: "starters" });
-    const mains = await storage.createCategory({ name: "Mains", slug: "mains" });
-    const desserts = await storage.createCategory({ name: "Desserts", slug: "desserts" });
+    // Create Categories with proper names
+    const breakfast = await storage.createCategory({ name: "Breakfast", slug: "breakfast" });
+    const lunch = await storage.createCategory({ name: "Lunch", slug: "lunch" });
+    const dinner = await storage.createCategory({ name: "Dinner", slug: "dinner" });
 
     console.log("✅ Categories created");
 
+    // Create Admin
     try {
       const existingAdmin = await storage.getUserByEmail("admin@lumiere.com");
       if (!existingAdmin) {
@@ -231,9 +213,9 @@ export async function seedDatabase() {
       console.error("❌ Error creating admin:", err);
     }
 
-    // Create sample menu items
+    // Create Sample Menu Items (updated with correct category IDs)
     await storage.createMenuItem({
-      categoryId: starters.id,
+      categoryId: breakfast.id,
       name: "Bruschetta",
       description: "Grilled bread with fresh tomatoes, basil, and olive oil",
       price: 800,
@@ -242,7 +224,7 @@ export async function seedDatabase() {
     });
 
     await storage.createMenuItem({
-      categoryId: starters.id,
+      categoryId: breakfast.id,
       name: "Caesar Salad",
       description: "Crisp romaine lettuce with parmesan and croutons",
       price: 1200,
@@ -251,7 +233,7 @@ export async function seedDatabase() {
     });
 
     await storage.createMenuItem({
-      categoryId: mains.id,
+      categoryId: lunch.id,
       name: "Grilled Salmon",
       description: "Fresh Atlantic salmon with herbs and lemon butter",
       price: 2400,
