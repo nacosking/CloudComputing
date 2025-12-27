@@ -53,31 +53,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [lastReservation, setLastReservation] = useState<Reservation | null>(null);
 
+  // ✅ Run checkAuth ONLY when the app starts
   useEffect(() => {
     checkAuth();
   }, []);
 
-  // 🔥 FIXED: Don't auto-fetch on user change - we do it explicitly in login/register
-  useEffect(() => {
-    if (!user) {
-      setReservations([]);
-    }
-  }, [user]);
+  // ✅ REMOVED: The useEffect that auto-fetched reservations
+  // We control this manually now for strict ordering
 
   async function checkAuth() {
     try {
+      console.log("🔍 Checking authentication...");
       const res = await fetch("/api/user", { credentials: "include" });
+      
       if (res.ok) {
         const userData = await res.json();
+        console.log("✅ User authenticated:", userData.email);
         setUser(userData);
-        // Fetch reservations after successful auth check
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await fetchReservationsInternal();
+        // ✅ STRICT ORDER: Only fetch after we know who the user is
+        await fetchReservations(); 
       } else {
+        // 401 is normal on page load - user is just not logged in
+        console.log("ℹ️ No active session (this is normal on page load)");
         setUser(null);
       }
     } catch (err) {
-      console.error("Auth check failed:", err);
+      console.error("❌ Auth check failed:", err);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -85,6 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function login(email: string, password: string) {
+    console.log("🔐 Logging in:", email);
+    
+    // 1. Perform Login
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -98,17 +102,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const userData = await res.json();
+    console.log("✅ Login successful:", userData.email);
     setUser(userData);
-    
-    // 🔥 FIX 1: Wait 500ms (half a second) to let the cookie settle
-    console.log("⏳ Login complete, waiting for cookie to settle...");
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // 🔥 FIX 2: Now fetch with retry logic
-    await fetchReservationsInternal();
+
+    // 2. ✅ STRICT ORDER: The 'await' above ensures the browser has 
+    // received the OK response and the Set-Cookie header.
+    // Now we can safely ask for reservations.
+    console.log("📋 Fetching user reservations...");
+    await fetchReservations();
   }
 
   async function register(data: RegisterData) {
+    console.log("📝 Registering new user:", data.email);
+    
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -122,14 +128,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const userData = await res.json();
+    console.log("✅ Registration successful:", userData.email);
     setUser(userData);
     
-    // 🔥 FIX: Increased wait time + retry logic handles edge cases
-    await new Promise(resolve => setTimeout(resolve, 200));
-    await fetchReservationsInternal();
+    // ✅ STRICT ORDER: Wait for registration to complete, then fetch
+    console.log("📋 Fetching user reservations...");
+    await fetchReservations();
   }
 
   async function logout() {
+    console.log("👋 Logging out...");
     try {
       await fetch("/api/logout", {
         method: "POST",
@@ -142,10 +150,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setReservations([]);
     setLastReservation(null);
+    console.log("✅ Logged out successfully");
   }
 
   async function addReservation(reservationData: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">): Promise<Reservation> {
     try {
+      console.log("🎫 Creating reservation...");
       const response = await fetch("/api/reservations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,70 +169,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const savedReservation = await response.json();
+      console.log("✅ Reservation created:", savedReservation.id);
       setLastReservation(savedReservation);
       setReservations((prev) => [...prev, savedReservation]);
       return savedReservation;
     } catch (error) {
-      console.error("Error saving reservation:", error);
+      console.error("❌ Error saving reservation:", error);
       throw error;
     }
   }
 
-  // 🔥 IMPROVED: Internal function with retry logic
-  // 🔥 ULTIMATE FETCH: Retry Logic + Cache Busting + Headers
-  async function fetchReservationsInternal(retryCount = 0) {
+  // ✅ Generic fetch function (No retry logic needed if cookies work properly)
+  async function fetchReservations() {
     try {
-      console.log(`🔍 Fetching reservations... (attempt ${retryCount + 1})`);
-      
-      // 1. Add Timestamp (?_t=...) to force a unique URL (Bypasses URL cache)
-      const uniqueUrl = `/api/reservations?_t=${Date.now()}`;
-      
-      const response = await fetch(uniqueUrl, { 
+      // Timestamp prevents browser caching old 401 errors
+      const res = await fetch(`/api/reservations?_t=${Date.now()}`, { 
         credentials: "include",
-        // 2. Add Headers to forbid browser caching
-        headers: { 
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0"
-        }
+        headers: { "Cache-Control": "no-cache" } 
       });
-      
-      if (response.ok) {
-        const data = await response.json();
+
+      if (res.ok) {
+        const data = await res.json();
         console.log("✅ Fetched", data.length, "reservations");
         setReservations(data);
-      } else if (response.status === 401 && retryCount < 3) {
-        // Session might not be saved yet, retry...
-        console.log(`⏳ Session/Cache issue, retrying in ${200 * (retryCount + 1)}ms...`);
-        await new Promise(resolve => setTimeout(resolve, 200 * (retryCount + 1)));
-        return fetchReservationsInternal(retryCount + 1);
       } else {
-        console.log("❌ Failed to fetch reservations:", response.status);
+        console.log("ℹ️ No reservations found or not authenticated");
+        setReservations([]);
       }
     } catch (error) {
-      console.error("Error fetching reservations:", error);
-      
-      // Retry on network errors too
-      if (retryCount < 3) {
-        console.log(`⏳ Network error, retrying in ${200 * (retryCount + 1)}ms...`);
-        await new Promise(resolve => setTimeout(resolve, 200 * (retryCount + 1)));
-        return fetchReservationsInternal(retryCount + 1);
-      }
+      console.error("❌ Error fetching reservations:", error);
     }
   }
 
-  // Public function for manual refresh
-  async function fetchReservations() {
-    await fetchReservationsInternal();
-  }
-
   function cancelReservation(id: string) {
+    console.log("🗑️ Canceling reservation:", id);
     setReservations((prev) => prev.filter((r) => r.id.toString() !== id));
   }
 
   async function markReservationPaid(id: number, qrData: string) {
     try {
-      console.log(`Processing payment for reservation ${id}...`);
+      console.log(`💳 Processing payment for reservation ${id}...`);
 
       const res = await fetch(`/api/reservations/${id}/pay`, {
         method: "PATCH",
@@ -234,16 +220,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error("Failed to update reservation on server");
 
       const updatedReservation = await res.json();
+      console.log("✅ Payment processed successfully");
 
       setReservations((prev) => 
         prev.map((r) => (r.id === id ? updatedReservation : r))
       );
       setLastReservation(updatedReservation);
 
-      console.log("✅ Payment status synced with server");
-
     } catch (err) {
       console.error("❌ Error marking reservation as paid:", err);
+      throw err;
     }
   }
 

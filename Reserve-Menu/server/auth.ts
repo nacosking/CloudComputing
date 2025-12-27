@@ -150,26 +150,23 @@ export function setupAuth(app: Express) {
 
       console.log("✅ User registered:", user.email, "userId:", user.id);
 
-      // 🔥 FIX: Double-save to ensure session persists to database
+      // ✅ PROPER FIX: Use callback-based approach with explicit save
       req.login(user, (err) => {
         if (err) {
           console.error("❌ Auto-login error:", err);
           return next(err);
         }
         
-        // Force an explicit save AFTER req.login completes
+        // Force session save and wait for completion
         req.session.save((saveErr) => {
           if (saveErr) {
             console.error("❌ Session save error:", saveErr);
             return next(saveErr);
           }
           
-          // 🔥 INCREASED DELAY: Use setTimeout instead of setImmediate for guaranteed wait
-          setTimeout(() => {
-            console.log("✅ Auto-login successful for:", user.email, "Session:", req.sessionID);
-            const { password: _, ...safeUser } = user;
-            res.status(201).json(safeUser);
-          }, 150); // 150ms delay
+          console.log("✅ Auto-login successful for:", user.email, "Session:", req.sessionID);
+          const { password: _, ...safeUser } = user;
+          res.status(201).json(safeUser);
         });
       });
     } catch (err) {
@@ -178,7 +175,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // 🔥 FIX: Login endpoint with guaranteed session persistence
+  // ✅ Login endpoint with proper session handling
   app.post("/api/login", (req, res, next) => {
     console.log("🔐 Login request for:", req.body.email);
 
@@ -199,19 +196,16 @@ export function setupAuth(app: Express) {
           return next(loginErr);
         }
 
-        // Double-save: req.login saves internally, then we force another save
+        // ✅ PROPER FIX: Explicitly save session before responding
         req.session.save((saveErr) => {
           if (saveErr) {
             console.error("❌ Session save error:", saveErr);
             return next(saveErr);
           }
 
-          // 🔥 INCREASED DELAY: Use setTimeout instead of setImmediate for guaranteed wait
-          setTimeout(() => {
-            console.log("✅ Login successful:", user.email, "Session ID:", req.sessionID);
-            const { password: _, ...safeUser } = user;
-            res.status(200).json(safeUser);
-          }, 150); // 150ms delay
+          console.log("✅ Login successful:", user.email, "Session ID:", req.sessionID);
+          const { password: _, ...safeUser } = user;
+          res.status(200).json(safeUser);
         });
       });
     })(req, res, next);
