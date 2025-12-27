@@ -29,7 +29,7 @@ export async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
-  // ✅ FIXED: Always trust proxy on AWS so cookies work behind the Load Balancer
+  // ✅ 1. Trust Proxy: Critical for AWS Load Balancers
   app.set("trust proxy", 1);
 
   const sessionSettings: session.SessionOptions = {
@@ -38,43 +38,24 @@ export function setupAuth(app: Express) {
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      // ✅ FIXED: Force secure to FALSE.
-      // This is critical because your site is accessed via http:// (not https yet).
-      // Without this, the browser throws away the cookie immediately.
+      // ✅ 2. Cookie Settings
+      // secure: false -> Allows HTTP (Critical for your current ALB URL)
       secure: false,
       httpOnly: true,
-      sameSite: "lax",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       sameSite: "lax",
     }
   };
 
-  console.log("🔐 Session config applied:", {
-    secure: sessionSettings.cookie?.secure,
-    sameSite: sessionSettings.cookie?.sameSite,
-    trustProxy: app.get("trust proxy")
-  });
-
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // ✅ ADDED: Middleware to log session status for debugging
-  app.use((req, res, next) => {
-    console.log("📋 Session check:", {
-      path: req.path,
-      sessionID: req.sessionID?.substring(0, 8) + "...",
-      isAuthenticated: req.isAuthenticated(),
-      userId: req.user?.id || null
-    });
-    next();
-  });
-
-  // Configure Passport Local Strategy
+  // ✅ 3. Configure Strategy to look for 'email' instead of 'username'
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
+    new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
       try {
-        const user = await storage.getUserByUsername(username);
+        const user = await storage.getUserByEmail(email);
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false, { message: "Invalid credentials" });
         } else {
@@ -87,40 +68,30 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => {
-    console.log("✅ Serializing user:", user.id);
     done(null, user.id);
   });
 
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
-      console.log("✅ Deserializing user:", user?.id || "not found");
       done(null, user);
     } catch (err) {
-      console.error("❌ Deserialize error:", err);
       done(err);
     }
   });
 
   // ============================================================
-  //   AUTHENTICATION ROUTES
+  //   AUTH ROUTES
   // ============================================================
 
-  // Register endpoint
   app.post("/api/register", async (req, res, next) => {
     try {
-      const existingUsername = await storage.getUserByUsername(req.body.username);
-      if (existingUsername) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
-
-      const existingEmail = await storage.getUserByEmail(req.body.email);
-      if (existingEmail) {
+      const existingUser = await storage.getUserByEmail(req.body.email);
+      if (existingUser) {
         return res.status(400).json({ message: "Email already exists" });
       }
 
       const hashedPassword = await hashPassword(req.body.password);
-
       const user = await storage.createUser({
         ...req.body,
         password: hashedPassword,
@@ -128,97 +99,42 @@ export function setupAuth(app: Express) {
       });
 
       req.login(user, (err) => {
-        if (err) {
-          console.error("❌ Login after register failed:", err);
-          return next(err);
-        }
-        console.log("✅ User registered and logged in:", user.id);
+        if (err) return next(err);
         const { password: _, ...safeUser } = user;
         res.status(201).json(safeUser);
       });
     } catch (err) {
-      console.error("❌ Register error:", err);
       next(err);
     }
   });
 
-  // Login endpoint
-  app.post("/api/login", async (req, res, next) => {
-    try {
-      const user = await storage.getUserByEmail(req.body.email);
+  // ✅ 4. Simplified Login Route
+  // Since we set `usernameField: "email"` above, Passport expects `req.body.email` automatically.
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: SelectUser, info: any) => {
+      if (err) return next(err);
       if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.status(401).json({ message: info?.message || "Invalid credentials" });
       }
 
-      passport.authenticate("local", (err: any, authenticatedUser: any, info: any) => {
-        if (err) {
-          console.error("❌ Auth error:", err);
-          return next(err);
-        }
-        if (!authenticatedUser) {
-          console.log("❌ Authentication failed:", info?.message);
-          return res.status(401).json({ message: info?.message || "Invalid credentials" });
-        }
-
-        req.login(authenticatedUser, (err) => {
-          if (err) {
-            console.error("❌ Login error:", err);
-            return next(err);
-          }
-          console.log("✅ User logged in successfully:", authenticatedUser.id);
-          console.log("✅ Session ID:", req.sessionID?.substring(0, 8) + "...");
-
-          const { password: _, ...safeUser } = authenticatedUser;
-          res.status(200).json(safeUser);
-        });
-      })({ body: { username: user.username, password: req.body.password } }, res, next);
-    } catch (err) {
-      console.error("❌ Login route error:", err);
-      next(err);
-    }
+      req.login(user, (err) => {
+        if (err) return next(err);
+        const { password: _, ...safeUser } = user;
+        res.json(safeUser);
+      });
+    })(req, res, next);
   });
 
-  // Logout endpoint
   app.post("/api/logout", (req, res, next) => {
-    const userId = req.user?.id;
     req.logout((err) => {
-      if (err) {
-        console.error("❌ Logout error:", err);
-        return next(err);
-      }
-      console.log("✅ User logged out:", userId);
+      if (err) return next(err);
       res.sendStatus(200);
     });
   });
 
-  // Get current user endpoint
   app.get("/api/user", (req, res) => {
-    console.log("🔍 Checking user auth:", {
-      isAuthenticated: req.isAuthenticated(),
-      userId: req.user?.id || null,
-      sessionID: req.sessionID?.substring(0, 8) + "..."
-    });
-
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
+    if (!req.isAuthenticated()) return res.sendStatus(401);
     const { password: _, ...safeUser } = req.user as SelectUser;
     res.json(safeUser);
   });
-}
-
-// Middleware to check if user is authenticated
-export function isAuthenticated(req: any, res: any, next: any) {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  res.status(401).json({ message: "Not authenticated" });
-}
-
-// Middleware to check if user is admin
-export function isAdmin(req: any, res: any, next: any) {
-  if (req.isAuthenticated() && req.user?.isAdmin) {
-    return next();
-  }
-  res.status(403).json({ message: "Admin access required" });
 }
