@@ -47,7 +47,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ✅ Helper: Wait with exponential backoff
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -71,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
         await fetchReservations(); 
       } else {
-        console.log("ℹ️ No active session (this is normal on page load)");
+        console.log("ℹ️ No active session");
         setUser(null);
       }
     } catch (err) {
@@ -101,7 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("✅ Login successful:", userData.email);
     setUser(userData);
 
-    // ✅ CRITICAL: Wait a moment for session to fully propagate
     await sleep(300);
     
     console.log("📋 Fetching user reservations...");
@@ -127,7 +125,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("✅ Registration successful:", userData.email);
     setUser(userData);
     
-    // ✅ CRITICAL: Wait for session to propagate
     await sleep(300);
     
     console.log("📋 Fetching user reservations...");
@@ -177,7 +174,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // ✅ NEW: Retry logic for session propagation issues
   async function fetchReservationsWithRetry(maxRetries = 3) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -190,11 +186,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const data = await res.json();
           console.log(`✅ Fetched ${data.length} reservations (attempt ${attempt})`);
           setReservations(data);
-          return; // Success!
+          return;
         } else if (res.status === 401 && attempt < maxRetries) {
-          // Session not ready yet, wait and retry
           console.log(`⏳ Session not ready (attempt ${attempt}), retrying in ${attempt * 200}ms...`);
-          await sleep(attempt * 200); // Exponential backoff
+          await sleep(attempt * 200);
           continue;
         } else {
           console.log("ℹ️ No reservations found or not authenticated");
