@@ -46,6 +46,7 @@ export default function PaymentPage() {
 
   async function onSubmit(values: z.infer<typeof paymentSchema>) {
     setIsProcessing(true);
+
     // Simulate payment processing
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
@@ -61,42 +62,10 @@ export default function PaymentPage() {
       paidAt: new Date().toISOString(),
     });
 
-    // Render QR code to hidden canvas and extract image
-    // Wait for next tick to ensure QR is rendered
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    let qrImageUrl = null;
-    if (qrRef.current) {
-      const canvas = qrRef.current.querySelector('canvas');
-      if (canvas) {
-        qrImageUrl = canvas.toDataURL('image/png');
-      }
-    }
+    // ✅ FIXED: Removed the image upload logic causing the crash.
+    // We simply mark it paid using the data string.
+    markReservationPaid(reservation.id, qrData);
 
-    // Upload QR image to backend if needed
-    let qrImageS3Url = null;
-    if (qrImageUrl) {
-      try {
-        const blob = await (await fetch(qrImageUrl)).blob();
-        const formData = new FormData();
-        formData.append('file', blob, `qr_${reservation.id}.png`);
-        formData.append('reservationId', reservation.id);
-        // Adjust endpoint as needed
-        const uploadRes = await fetch('/api/upload-qr', {
-          method: 'POST',
-          body: formData,
-        });
-        if (uploadRes.ok) {
-          const data = await uploadRes.json();
-          qrImageS3Url = data.url;
-        }
-      } catch (err) {
-        // Handle upload error
-        console.error('QR upload failed', err);
-      }
-    }
-
-    // Save S3 URL or fallback to qrData string
-    markReservationPaid(reservation.id, qrImageS3Url || qrData);
     setIsProcessing(false);
     setIsSuccess(true);
 

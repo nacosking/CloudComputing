@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { CalendarIcon, CheckCircle2, User, Mail, Clock, Users } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
 import { useLocation } from "wouter";
 
+// 1. Define Schema (No userId required here)
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
   email: z.string().email("Invalid email address"),
@@ -25,27 +26,43 @@ const formSchema = z.object({
 
 export function BookingForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [, navigate] = useLocation();
   const { user, addReservation } = useAuth();
 
+  // 2. Initialize Form
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: user?.name || "",
-      email: user?.email || "",
+      name: "",
+      email: "",
     },
   });
 
+  // 3. AUTO-FILL FIX: Watch for 'user' changes and update form
+  // This ensures fields populate even if user loads 1 second after the page
+  useEffect(() => {
+    if (user) {
+      form.setValue("name", user.name);
+      form.setValue("email", user.email);
+    }
+  }, [user, form]);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (isSubmitting) return;
+
     if (!user) {
       navigate("/login");
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
       const dateStr = format(values.date, "yyyy-MM-dd");
 
-      // 1. AWAIT the result so lastReservation is set in the context
+      // 4. SUBMISSION FIX: Do NOT send userId here.
+      // The backend (server/routes.ts) will grab it from the secure session.
       await addReservation({
         name: values.name,
         email: values.email,
@@ -54,19 +71,19 @@ export function BookingForm() {
         guests: parseInt(values.guests),
       });
 
-      // 2. Only show success after the DB has confirmed (201 Created)
       setIsSubmitted(true);
 
-      // 3. Move to payment page after the animation
       setTimeout(() => {
         navigate("/payment");
       }, 2000);
     } catch (error) {
       console.error("Reservation failed:", error);
-      // Add a toast or alert here if you want to show the error
+      setIsSubmitting(false);
+      alert("Failed to create reservation. Please try again.");
     }
   }
 
+  // --- Success View ---
   if (isSubmitted) {
     return (
       <motion.div
@@ -92,13 +109,13 @@ export function BookingForm() {
     );
   }
 
+  // --- Form View ---
   return (
     <div className="relative">
       {/* Background Glow */}
       <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl blur-2xl opacity-60" />
 
       <div className="relative bg-gradient-to-br from-card to-card/90 p-8 md:p-10 rounded-2xl shadow-2xl border border-primary/20">
-        {/* Header */}
         <div className="mb-8">
           <h3 className="font-serif text-3xl font-bold mb-2 text-foreground">Reserve Your Table</h3>
           <p className="text-foreground/70 text-sm">Complete your booking in just a few steps</p>
@@ -106,6 +123,7 @@ export function BookingForm() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            
             {/* Name & Email Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <FormField
@@ -121,6 +139,7 @@ export function BookingForm() {
                       <Input
                         placeholder="John Doe"
                         {...field}
+                        disabled={isSubmitting}
                         className="bg-background/80 border-primary/20 focus:border-primary/50 focus:ring-primary/20 rounded-lg h-11 placeholder:text-foreground/40"
                       />
                     </FormControl>
@@ -141,6 +160,7 @@ export function BookingForm() {
                       <Input
                         placeholder="john@example.com"
                         {...field}
+                        disabled={isSubmitting}
                         className="bg-background/80 border-primary/20 focus:border-primary/50 focus:ring-primary/20 rounded-lg h-11 placeholder:text-foreground/40"
                       />
                     </FormControl>
@@ -174,7 +194,9 @@ export function BookingForm() {
                             whileTap={{ scale: 0.98 }}
                           >
                             <Button
+                              type="button"
                               variant={"outline"}
+                              disabled={isSubmitting}
                               className={cn(
                                 "pl-4 pr-3 text-left font-normal rounded-lg h-12 transition-all",
                                 "bg-gradient-to-r from-background/80 to-primary/5",
@@ -236,7 +258,7 @@ export function BookingForm() {
                       <Clock className="w-4 h-4 text-primary" />
                       Time
                     </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                       <FormControl>
                         <SelectTrigger className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11">
                           <SelectValue placeholder="Select time" />
@@ -268,7 +290,7 @@ export function BookingForm() {
                       <Users className="w-4 h-4 text-primary" />
                       Guests
                     </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                       <FormControl>
                         <SelectTrigger className="bg-background/80 border-primary/20 focus:border-primary/50 rounded-lg h-11">
                           <SelectValue placeholder="Party size" />
@@ -291,14 +313,26 @@ export function BookingForm() {
 
             {/* Submit Button */}
             <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
+              whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
             >
               <Button
                 type="submit"
-                className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground rounded-lg shadow-lg hover:shadow-xl transition-all"
+                disabled={isSubmitting}
+                className="w-full h-12 text-lg font-serif bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {user ? "Confirm Reservation" : "Sign In to Book"}
+                {isSubmitting ? (
+                  <motion.span
+                    animate={{ opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  >
+                    Processing...
+                  </motion.span>
+                ) : user ? (
+                  "Confirm Reservation"
+                ) : (
+                  "Sign In to Book"
+                )}
               </Button>
             </motion.div>
 

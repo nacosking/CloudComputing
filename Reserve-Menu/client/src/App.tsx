@@ -20,7 +20,7 @@ function Router() {
       <Route path="/payment" component={PaymentPage} />
 
       {/* MOVE ADMIN HERE, BEFORE THE CATCH-ALL */}
-      <Route path="/admin" component={AdminPage} />
+      <Route path="/admin/menu" component={AdminPage} />
 
       {/* This must always be last */}
       <Route component={NotFound} />

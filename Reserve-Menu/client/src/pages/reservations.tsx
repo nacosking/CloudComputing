@@ -6,6 +6,7 @@ import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import { Trash2, Calendar, Users, Clock, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
+// ✅ ADDED: Import the QR Code generator
 import { QRCodeCanvas } from "qrcode.react";
 
 export default function ReservationsPage() {
@@ -45,9 +46,11 @@ export default function ReservationsPage() {
             <p className="text-foreground/60">Welcome, <span className="font-semibold">{user.name}</span></p>
           </div>
           <div className="flex gap-4">
-            <Button asChild variant="outline" className="border-background/30 text-background hover:bg-background hover:text-foreground">
-              <a href="/">Home</a>
-            </Button>
+            <Link href="/">
+              <Button variant="outline" className="border-background/30 text-background hover:bg-background hover:text-foreground">
+                Home
+              </Button>
+            </Link>
             <Button
               onClick={handleLogout}
               variant="ghost"
@@ -78,7 +81,7 @@ export default function ReservationsPage() {
               You haven't made any reservations yet. Book a table at Lumière to get started.
             </p>
             <Button asChild className="rounded-full px-8">
-              <a href="/#book">Book a Table</a>
+              <Link href="/#book">Book a Table</Link>
             </Button>
           </motion.div>
         ) : (
@@ -89,9 +92,8 @@ export default function ReservationsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${
-                  cancelingId === reservation.id ? "opacity-50" : ""
-                }`}
+                className={`bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg hover:shadow-xl transition-all ${cancelingId === reservation.id ? "opacity-50" : ""
+                  }`}
               >
                 <div className="grid md:grid-cols-2 gap-8">
                   <div>
@@ -139,7 +141,8 @@ export default function ReservationsPage() {
                   </div>
 
                   <div className="flex flex-col justify-between">
-                    {reservation.paid && reservation.qrCode ? (
+                    {/* ✅ UPDATED LOGIC: Draw QR Code from Text */}
+                    {reservation.isPaid && reservation.qrUrl ? (
                       <div className="bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20 rounded-lg p-6 mb-6">
                         <div className="flex items-center gap-2 mb-4">
                           <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -148,17 +151,18 @@ export default function ReservationsPage() {
                         <p className="text-muted-foreground text-sm mb-4">
                           Show this QR code when you arrive at the restaurant.
                         </p>
-                        <div className="bg-background rounded-lg p-4 flex justify-center border border-primary/30">
+
+                        {/* ⬇️ CHANGED: Use QRCodeCanvas instead of <img> */}
+                        <div className="bg-white rounded-lg p-4 flex justify-center border border-primary/30 w-fit mx-auto">
                           <QRCodeCanvas
-                            value={reservation.qrCode}
-                            size={160}
+                            value={reservation.qrUrl}
+                            size={150}
                             level="H"
                             includeMargin={true}
-                            bgColor="#ffffff"
-                            fgColor="#000000"
                           />
                         </div>
-                        <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20">
+
+                        <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20 text-center">
                           <p className="text-xs text-muted-foreground mb-1">Confirmation ID</p>
                           <p className="font-mono text-xs font-bold text-primary">{reservation.id}</p>
                         </div>
@@ -178,7 +182,7 @@ export default function ReservationsPage() {
                     )}
 
                     <Button
-                      onClick={() => handleCancel(reservation.id)}
+                      onClick={() => handleCancel(reservation.id.toString())}
                       variant="ghost"
                       className="w-full border border-red-200 text-red-600 hover:bg-red-50 group"
                     >
