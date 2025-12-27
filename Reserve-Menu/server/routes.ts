@@ -4,6 +4,12 @@ import { storage } from "./storage";
 import { setupAuth, hashPassword } from "./auth";
 import { insertReservationSchema } from "@shared/schema";
 import { z } from "zod";
+import { Pool } from "pg";
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined
+});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -27,22 +33,44 @@ export async function registerRoutes(
   // ============================================================
 
   // GET MENU: Fetches items and categories in one go
-  app.get('/api/menu', async (req, res) => {
+  app.get('/api/menu', async (_req, res) => {
     try {
-      const result = await pool.query('SELECT * FROM menu_items ORDER BY id ASC');
-      // Format for frontend tabs
-      const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
-      result.rows.forEach(item => {
-        if (!menuData[item.category]) menuData[item.category] = [];
-        menuData[item.category].push({
-          ...item,
-          price: `$${(item.price / 100).toFixed(2)}` // ✅ Convert cents to dollars
-        });
+      const items = await storage.getMenuItemsWithCategories();
+
+      const menuData: Record<string, any[]> = {
+        breakfast: [],
+        lunch: [],
+        dinner: []
+      };
+
+      items.forEach(item => {
+        let catName = item.categoryName ? item.categoryName.toLowerCase() : 'uncategorized';
+
+        // Mapping DB Category names to Frontend Tabs
+        if (catName === 'starters') catName = 'breakfast';
+        if (catName === 'mains') catName = 'lunch';
+        if (catName === 'desserts' || catName === 'drinks') catName = 'dinner';
+
+        if (menuData[catName]) {
+          // ✅ FIXED: Ensure price is a number before converting
+          const priceInCents = typeof item.price === 'number' ? item.price : parseInt(item.price, 10);
+          const priceInDollars = (priceInCents / 100).toFixed(2);
+
+          // Debug log (remove after confirming it works)
+          console.log(`Item: ${item.name}, Raw price: ${item.price}, Converted: ${priceInDollars}`);
+
+          menuData[catName].push({
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            price: `${priceInDollars}` // ✅ Always returns "$8.00" format
+          });
+        }
       });
+
       res.json(menuData);
     } catch (err) {
-      console.error("DB Error:", err);
-      // Fallback to empty if DB fails, so app doesn't crash
+      console.error("Menu Fetch Error:", err);
       res.json({ breakfast: [], lunch: [], dinner: [] });
     }
   });
