@@ -8,9 +8,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
 import { Lock, CreditCard, Check } from "lucide-react";
-import { useState, useRef } from "react";
-import { QRCodeCanvas } from "qrcode.react";
+import { useState } from "react";
 import { format, parseISO } from "date-fns";
+
+// ✅ 1. REMOVED QRCodeCanvas import (Server handles images now)
 
 const paymentSchema = z.object({
   cardName: z.string().min(2, "Name on card is required"),
@@ -39,10 +40,9 @@ export default function PaymentPage() {
   }
 
   const reservation = lastReservation;
-  const depositAmount = 50; // Fixed deposit amount in USD
+  const depositAmount = 50;
 
-  // Ref for hidden QR code canvas
-  const qrRef = useRef(null);
+  // ✅ 2. REMOVED qrRef (Not needed)
 
   async function onSubmit(values: z.infer<typeof paymentSchema>) {
     setIsProcessing(true);
@@ -50,21 +50,10 @@ export default function PaymentPage() {
     // Simulate payment processing
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Generate QR code data with reservation details
-    const qrData = JSON.stringify({
-      reservationId: reservation.id,
-      name: reservation.name,
-      date: reservation.date,
-      time: reservation.time,
-      guests: reservation.guests,
-      email: reservation.email,
-      paid: true,
-      paidAt: new Date().toISOString(),
-    });
-
-    // ✅ FIXED: Removed the image upload logic causing the crash.
-    // We simply mark it paid using the data string.
-    markReservationPaid(reservation.id, qrData);
+    // ✅ 3. FIXED: Do not send JSON string.
+    // The Backend already has the S3 URL. We just need to confirm payment.
+    // We pass 'undefined' or the existing URL to avoid overwriting the DB with bad data.
+    markReservationPaid(reservation.id, reservation.qrUrl);
 
     setIsProcessing(false);
     setIsSuccess(true);
@@ -108,26 +97,9 @@ export default function PaymentPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted py-12 px-4">
-      {/* Hidden QR code for image extraction */}
-      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }} ref={qrRef} aria-hidden="true">
-        <QRCodeCanvas
-          value={JSON.stringify({
-            reservationId: reservation.id,
-            name: reservation.name,
-            date: reservation.date,
-            time: reservation.time,
-            guests: reservation.guests,
-            email: reservation.email,
-            paid: true,
-            paidAt: new Date().toISOString(),
-          })}
-          size={256}
-          level="H"
-          includeMargin={true}
-          bgColor="#ffffff"
-          fgColor="#000000"
-        />
-      </div>
+
+      {/* ✅ 4. REMOVED Hidden <QRCodeCanvas> div */}
+
       <div className="max-w-2xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
