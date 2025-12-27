@@ -8,19 +8,13 @@ import {
 } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import { Pool } from "pg";
+import createMemoryStore from "memorystore";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import QRCode from "qrcode";
 
-const PgSession = connectPgSimple(session);
+const MemoryStore = createMemoryStore(session);
 const s3Client = new S3Client({ region: "us-east-1" });
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || "";
-
-// ✅ Create a PostgreSQL connection pool for sessions
-const sessionPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -54,14 +48,13 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    // ✅ FIXED: Use PostgreSQL session store instead of memory
-    this.sessionStore = new PgSession({
-      pool: sessionPool,
-      tableName: "session", // Default table name
-      createTableIfMissing: true, // Auto-create session table
+    // ✅ Use MemoryStore with sticky sessions
+    this.sessionStore = new MemoryStore({ 
+      checkPeriod: 86400000, // 24 hours
+      ttl: 2592000000 // 30 days
     });
     
-    console.log("✅ PostgreSQL session store initialized");
+    console.log("✅ Memory session store initialized (with sticky sessions)");
   }
   
   async markReservationPaid(id: number, qrUrl: string): Promise<Reservation> {
