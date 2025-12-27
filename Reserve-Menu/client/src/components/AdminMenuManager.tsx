@@ -13,7 +13,6 @@ interface MenuItem {
     description: string;
 }
 
-// ✅ NEW: Interface for Category
 interface Category {
     id: number;
     name: string;
@@ -24,7 +23,6 @@ export function AdminMenuManager() {
     const { toast } = useToast();
 
     const [items, setItems] = useState<MenuItem[]>([]);
-    // ✅ NEW: Store real categories from DB
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState<number | null>(null);
@@ -42,7 +40,6 @@ export function AdminMenuManager() {
 
     const fetchData = async () => {
         try {
-            // ✅ 1. Fetch BOTH Menu and Categories
             const [menuRes, catRes] = await Promise.all([
                 fetch('/api/menu'),
                 fetch('/api/categories')
@@ -52,15 +49,13 @@ export function AdminMenuManager() {
 
             const menuData = await menuRes.json();
             const catData = await catRes.json();
-
-            // Store the real categories
             setCategories(catData);
 
-            // Flatten the grouped data
+            // Flatten data safely handling different category names
             const allItems = [
-                ...(menuData.breakfast || []).map((i: any) => ({ ...i, category: 'breakfast' })),
-                ...(menuData.lunch || []).map((i: any) => ({ ...i, category: 'lunch' })),
-                ...(menuData.dinner || []).map((i: any) => ({ ...i, category: 'dinner' }))
+                ...(menuData.breakfast || menuData.starters || []).map((i: any) => ({ ...i, category: 'breakfast' })),
+                ...(menuData.lunch || menuData.mains || []).map((i: any) => ({ ...i, category: 'lunch' })),
+                ...(menuData.dinner || menuData.desserts || []).map((i: any) => ({ ...i, category: 'dinner' }))
             ];
 
             setItems(allItems);
@@ -74,7 +69,6 @@ export function AdminMenuManager() {
 
     const handleDelete = async (id: number) => {
         if (!confirm("Are you sure you want to delete this item?")) return;
-
         try {
             const res = await fetch(`/api/menu-items/${id}`, { method: 'DELETE' });
             if (res.ok) {
@@ -89,18 +83,23 @@ export function AdminMenuManager() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // ✅ 2. FIX: Find the REAL ID based on the selected slug
-        const selectedCategory = categories.find(c => c.slug === formData.category);
+        // Find the category based on current selection
+        // We check both the slug (e.g. 'breakfast') and name to be safe
+        const selectedCategory = categories.find(c =>
+            c.slug === formData.category ||
+            c.name.toLowerCase() === formData.category.toLowerCase()
+        );
 
-        if (!selectedCategory) {
-            toast({ variant: "destructive", title: "Error", description: "Invalid Category selected" });
-            return;
-        }
+        // Fallback to the first category if matching fails
+        const categoryId = selectedCategory ? selectedCategory.id : categories[0]?.id;
+
+        // ✅ PRICE FIX: User types "24.50", we multiply by 100 -> 2450 cents
+        const priceInCents = Math.round(parseFloat(formData.price) * 100);
 
         const payload = {
             ...formData,
-            price: parseInt(formData.price) || 0,
-            categoryId: selectedCategory.id // ✅ Uses the REAL ID from database
+            price: priceInCents,
+            categoryId: categoryId
         };
 
         const url = isEditing ? `/api/menu-items/${isEditing}` : '/api/menu-items';
@@ -128,10 +127,14 @@ export function AdminMenuManager() {
 
     const startEdit = (item: MenuItem) => {
         setIsEditing(item.id);
+
+        // ✅ PRICE FIX: Database has 2400. We divide by 100 -> show "24.00" in input
+        const displayPrice = (item.price / 100).toFixed(2);
+
         setFormData({
             category: item.category || "breakfast",
             name: item.name,
-            price: item.price.toString(),
+            price: displayPrice,
             description: item.description || ""
         });
     };
@@ -159,13 +162,12 @@ export function AdminMenuManager() {
                                 <label className="text-sm font-medium leading-none">Category</label>
                                 <Select
                                     value={formData.category}
-                                    onValueChange={(val) => setFormData({ ...formData, category: val })}
+                                    onValueChange={(val) => setFormData({...formData, category: val})}
                                 >
                                     <SelectTrigger className="bg-white">
                                         <SelectValue placeholder="Select Category" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {/* ✅ 3. FIX: Dynamic Dropdown Options */}
                                         {categories.map(cat => (
                                             <SelectItem key={cat.id} value={cat.slug}>
                                                 {cat.name}
@@ -187,10 +189,11 @@ export function AdminMenuManager() {
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium leading-none">Price (cents)</label>
+                                <label className="text-sm font-medium leading-none">Price ($)</label>
                                 <Input
-                                    placeholder="2400"
+                                    placeholder="24.00"
                                     type="number"
+                                    step="0.01"
                                     className="bg-white"
                                     value={formData.price}
                                     onChange={e => setFormData({ ...formData, price: e.target.value })}
@@ -215,12 +218,7 @@ export function AdminMenuManager() {
                             </Button>
 
                             {isEditing && (
-                                <Button
-                                    type="button"
-                                    onClick={cancelEdit}
-                                    variant="outline"
-                                    className="flex items-center gap-2"
-                                >
+                                <Button type="button" onClick={cancelEdit} variant="outline" className="flex items-center gap-2">
                                     <X size={16} /> Cancel
                                 </Button>
                             )}
@@ -241,9 +239,7 @@ export function AdminMenuManager() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {items.length === 0 && (
-                            <tr>
-                                <td colSpan={4} className="p-4 text-center text-gray-500">No items found.</td>
-                            </tr>
+                            <tr><td colSpan={4} className="p-4 text-center text-gray-500">No items found.</td></tr>
                         )}
                         {items.map(item => (
                             <tr key={item.id} className="hover:bg-gray-50 transition-colors">
@@ -257,20 +253,10 @@ export function AdminMenuManager() {
                                     ${(Number(item.price) / 100).toFixed(2)}
                                 </td>
                                 <td className="p-4 text-right space-x-2">
-                                    <Button
-                                        onClick={() => startEdit(item)}
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-blue-600 hover:bg-blue-50"
-                                    >
+                                    <Button onClick={() => startEdit(item)} variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50">
                                         <Edit className="w-4 h-4" />
                                     </Button>
-                                    <Button
-                                        onClick={() => handleDelete(item.id)}
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-red-600 hover:bg-red-50"
-                                    >
+                                    <Button onClick={() => handleDelete(item.id)} variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:bg-red-50">
                                         <Trash2 className="w-4 h-4" />
                                     </Button>
                                 </td>
