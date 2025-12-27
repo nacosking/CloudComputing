@@ -12,7 +12,34 @@ declare module "http" {
   }
 }
 
+// ✅ CRITICAL: Trust proxy FIRST, before any other middleware
 app.set("trust proxy", 1);
+
+// ✅ Add CORS headers if needed (for development or if frontend is on different port)
+app.use((req, res, next) => {
+  // Allow credentials (cookies)
+  res.header("Access-Control-Allow-Credentials", "true");
+
+  // Allow the origin (adjust if needed)
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
+  // Allow these methods
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+
+  // Allow these headers
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Cookie");
+
+  // Handle preflight
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -71,9 +98,6 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -81,16 +105,11 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     {
       port,
       host: "0.0.0.0",
-      // reusePort: true,
     },
     () => {
       log(`serving on port ${port}`);
