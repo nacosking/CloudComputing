@@ -129,35 +129,54 @@ export async function registerRoutes(
   // ============================================================
 
   app.post("/api/reservations", async (req, res) => {
-    console.log("================================================");
-    console.log("📋 [RESERVATION] Incoming Request");
-    console.log("🔐 Session ID:", req.sessionID?.substring(0, 10) + "...");
-    console.log("✅ Is Authenticated:", req.isAuthenticated());
-    console.log("👤 User from Session:", req.user);
-    console.log("📦 Request Body:", JSON.stringify(req.body, null, 2));
-    console.log("================================================");
-
     try {
-      // Parse with Zod
+      // 1. Validate the form data (Date, Time, Guests, etc.)
       const input = insertReservationSchema.parse(req.body);
-      console.log("✅ Zod parsed input:", JSON.stringify(input, null, 2));
-      console.log("🔑 Input keys:", Object.keys(input));
+
+      // 2. ✅ CRITICAL FIX: Link to the Logged-in User
+      if (req.isAuthenticated() && req.user) {
+        const user = req.user as any;
+
+        // Force the reservation to belong to this user
+        (input as any).userId = user.id;
+
+        // OPTIONAL: Force the email to match the account email.
+        // This ensures "getReservationsByEmail" always finds it.
+        (input as any).email = user.email;
+        (input as any).name = user.name;
+      }
 
       const reservation = await storage.createReservation(input);
 
-      console.log("🎉 SUCCESS: Reservation created:", reservation.id);
+      console.log("🎉 Reservation created for User ID:", (input as any).userId || "Guest");
       res.status(201).json(reservation);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        console.error("❌ Validation error:", err.errors);
         return res.status(400).json({
           message: err.errors[0].message,
           field: err.errors[0].path.join('.'),
         });
       }
-      console.error("❌ DB Error:", err);
-      console.error("❌ Full error object:", JSON.stringify(err, null, 2));
+      console.error("Reservation Error:", err);
       res.status(500).json({ error: "Reservation failed" });
+    }
+  });
+
+  // GET user's reservations (requires authentication)
+  app.get("/api/reservations", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const user = req.user as any;
+
+      // Fetch by email (Since we now force the email in POST, this is safe)
+      const userReservations = await storage.getReservationsByEmail(user.email);
+      res.json(userReservations);
+    } catch (err) {
+      console.error("Fetch Reservations Error:", err);
+      res.status(500).json({ error: "Failed to fetch reservations" });
     }
   });
 
