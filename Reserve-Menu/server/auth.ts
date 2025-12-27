@@ -164,12 +164,12 @@ export function setupAuth(app: Express) {
             return next(saveErr);
           }
           
-          // Wait a tick to ensure DB write completes
-          setImmediate(() => {
+          // 🔥 INCREASED DELAY: Use setTimeout instead of setImmediate for guaranteed wait
+          setTimeout(() => {
             console.log("✅ Auto-login successful for:", user.email, "Session:", req.sessionID);
             const { password: _, ...safeUser } = user;
             res.status(201).json(safeUser);
-          });
+          }, 150); // 150ms delay
         });
       });
     } catch (err) {
@@ -206,12 +206,12 @@ export function setupAuth(app: Express) {
             return next(saveErr);
           }
 
-          // Use setImmediate to ensure the save completes before response
-          setImmediate(() => {
+          // 🔥 INCREASED DELAY: Use setTimeout instead of setImmediate for guaranteed wait
+          setTimeout(() => {
             console.log("✅ Login successful:", user.email, "Session ID:", req.sessionID);
             const { password: _, ...safeUser } = user;
             res.status(200).json(safeUser);
-          });
+          }, 150); // 150ms delay
         });
       });
     })(req, res, next);

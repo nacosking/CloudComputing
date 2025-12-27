@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userData = await res.json();
         setUser(userData);
         // Fetch reservations after successful auth check
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 100));
         await fetchReservationsInternal();
       } else {
         setUser(null);
@@ -100,8 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userData = await res.json();
     setUser(userData);
     
-    // 🔥 FIX: Wait for session to be fully readable, then fetch reservations
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // 🔥 FIX: Increased wait time + retry logic handles edge cases
+    await new Promise(resolve => setTimeout(resolve, 200));
     await fetchReservationsInternal();
   }
 
@@ -121,8 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userData = await res.json();
     setUser(userData);
     
-    // 🔥 FIX: Wait for session to be fully readable, then fetch reservations
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // 🔥 FIX: Increased wait time + retry logic handles edge cases
+    await new Promise(resolve => setTimeout(resolve, 200));
     await fetchReservationsInternal();
   }
 
@@ -165,20 +165,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Internal function that doesn't need to be exposed
-  async function fetchReservationsInternal() {
+  // 🔥 IMPROVED: Internal function with retry logic
+  // 🔥 ULTIMATE FETCH: Retry Logic + Cache Busting + Headers
+  async function fetchReservationsInternal(retryCount = 0) {
     try {
-      console.log("🔍 Fetching reservations...");
-      const response = await fetch("/api/reservations", { credentials: "include" });
+      console.log(`🔍 Fetching reservations... (attempt ${retryCount + 1})`);
+      
+      // 1. Add Timestamp (?_t=...) to force a unique URL (Bypasses URL cache)
+      const uniqueUrl = `/api/reservations?_t=${Date.now()}`;
+      
+      const response = await fetch(uniqueUrl, { 
+        credentials: "include",
+        // 2. Add Headers to forbid browser caching
+        headers: { 
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
+        }
+      });
+      
       if (response.ok) {
         const data = await response.json();
         console.log("✅ Fetched", data.length, "reservations");
         setReservations(data);
+      } else if (response.status === 401 && retryCount < 3) {
+        // Session might not be saved yet, retry...
+        console.log(`⏳ Session/Cache issue, retrying in ${200 * (retryCount + 1)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, 200 * (retryCount + 1)));
+        return fetchReservationsInternal(retryCount + 1);
       } else {
         console.log("❌ Failed to fetch reservations:", response.status);
       }
     } catch (error) {
       console.error("Error fetching reservations:", error);
+      
+      // Retry on network errors too
+      if (retryCount < 3) {
+        console.log(`⏳ Network error, retrying in ${200 * (retryCount + 1)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, 200 * (retryCount + 1)));
+        return fetchReservationsInternal(retryCount + 1);
+      }
     }
   }
 
