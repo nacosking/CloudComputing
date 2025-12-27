@@ -53,15 +53,12 @@ export default function PaymentPage() {
     // ✅ 3. FIXED: Do not send JSON string.
     // The Backend already has the S3 URL. We just need to confirm payment.
     // We pass 'undefined' or the existing URL to avoid overwriting the DB with bad data.
-    markReservationPaid(reservation.id, reservation.qrUrl);
+    // markReservationPaid(reservation.id, reservation.qrUrl);
 
-<<<<<<< HEAD
-=======
     // ✅ FIXED: Removed the image upload logic causing the crash.
     // We simply mark it paid using the data string.
     markReservationPaid(reservation.id, qrData);
 
->>>>>>> master
     setIsProcessing(false);
     setIsSuccess(true);
 
