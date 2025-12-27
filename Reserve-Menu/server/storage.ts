@@ -57,16 +57,23 @@ export class DatabaseStorage implements IStorage {
     console.log("✅ Memory session store initialized (with sticky sessions)");
   }
   
-  async markReservationPaid(id: number, qrUrl: string): Promise<Reservation> {
-    const [updated] = await db
-      .update(reservations)
+  async markReservationPaid(id: number, qrData: string): Promise<Reservation> {
+    // 1. Generate QR code as PNG buffer
+    const qrBuffer = await QRCode.toBuffer(qrData, {...});
+    
+    // 2. Upload to S3
+    const fileName = `reservations/${id}/payment_qr_${Date.now()}.png`;
+    await s3Client.send(new PutObjectCommand({...}));
+    
+    // 3. Get S3 URL
+    const qrUrl = `https://${BUCKET_NAME}.s3.amazonaws.com/${fileName}`;
+    
+    // 4. Update database with S3 URL (not JSON string!)
+    await db.update(reservations)
       .set({ 
         status: "paid",
-        qrUrl: qrUrl
-      })
-      .where(eq(reservations.id, id))
-      .returning();
-    return updated;
+        qrUrl: qrUrl  // ✅ Stores S3 URL
+      });
   }
 
   // ============================================================
