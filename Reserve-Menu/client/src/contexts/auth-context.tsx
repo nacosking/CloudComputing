@@ -17,7 +17,17 @@ export interface Reservation {
   guests: number;
   createdAt?: string;
   isPaid?: boolean;
+<<<<<<< HEAD
   qrUrl?: string;
+=======
+}
+
+interface RegisterData {
+  username: string;
+  name: string;
+  email: string;
+  password: string;
+>>>>>>> master
 }
 
 interface RegisterData {
@@ -40,10 +50,24 @@ interface AuthContextType {
   addReservation: (reservation: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">) => Promise<Reservation>;
   fetchReservations: () => Promise<void>;
   cancelReservation: (id: string) => void;
+<<<<<<< HEAD
   markReservationPaid: (id: number, qrData: string) => void;
+=======
+  markReservationPaid: (id: number, qrData: string) => Promise<void>;
+>>>>>>> master
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function mapReservation(res: any): Reservation {
+  return {
+    ...res,
+    isPaid: res.status === "paid"  // ✅ Convert status to isPaid
+  };
+}
+
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -55,25 +79,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      fetchReservations();
-    } else {
-      setReservations([]);
-    }
-  }, [user]);
-
   async function checkAuth() {
     try {
+<<<<<<< HEAD
       const res = await fetch("/api/user", { credentials: "include" });
+=======
+      console.log("🔍 Checking authentication...");
+      const res = await fetch("/api/user", { credentials: "include" });
+      
+>>>>>>> master
       if (res.ok) {
         const userData = await res.json();
+        console.log("✅ User authenticated:", userData.email);
         setUser(userData);
+        await fetchReservations(); 
       } else {
+        console.log("ℹ️ No active session");
         setUser(null);
       }
     } catch (err) {
-      console.error("Auth check failed:", err);
+      console.error("❌ Auth check failed:", err);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -81,6 +106,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function login(email: string, password: string) {
+<<<<<<< HEAD
+=======
+    console.log("🔐 Logging in:", email);
+    
+>>>>>>> master
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -93,10 +123,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(error.message || "Login failed");
     }
     const userData = await res.json();
+    console.log("✅ Login successful:", userData.email);
     setUser(userData);
+
+    await sleep(300);
+    
+    console.log("📋 Fetching user reservations...");
+    await fetchReservationsWithRetry();
   }
 
   async function register(data: RegisterData) {
+<<<<<<< HEAD
+=======
+    console.log("📝 Registering new user:", data.email);
+    
+>>>>>>> master
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -109,21 +150,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(error.message || "Registration failed");
     }
     const userData = await res.json();
+    console.log("✅ Registration successful:", userData.email);
     setUser(userData);
+    
+    await sleep(300);
+    
+    console.log("📋 Fetching user reservations...");
+    await fetchReservationsWithRetry();
   }
 
   async function logout() {
+    console.log("👋 Logging out...");
     try {
+<<<<<<< HEAD
       await fetch("/api/logout", { method: "POST", credentials: "include" });
+=======
+      await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include"
+      });
+>>>>>>> master
     } catch (e) {
       console.error("Logout error:", e);
     }
     setUser(null);
     setReservations([]);
     setLastReservation(null);
+    console.log("✅ Logged out successfully");
   }
 
   async function addReservation(reservationData: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">): Promise<Reservation> {
+<<<<<<< HEAD
     const response = await fetch("/api/reservations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -134,6 +191,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.message || "Failed to save reservation");
+=======
+    try {
+      console.log("🎫 Creating reservation...");
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(reservationData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to save reservation");
+      }
+
+      const savedReservation = await response.json();
+      console.log("✅ Reservation created:", savedReservation.id);
+      setLastReservation(savedReservation);
+      setReservations((prev) => [...prev, savedReservation]);
+      return savedReservation;
+    } catch (error) {
+      console.error("❌ Error saving reservation:", error);
+      throw error;
+>>>>>>> master
     }
 
     const savedReservation = await response.json();
@@ -142,22 +223,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return savedReservation;
   }
 
+  async function fetchReservationsWithRetry(maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetch(`/api/reservations?_t=${Date.now()}`, { 
+          credentials: "include",
+          headers: { "Cache-Control": "no-cache" } 
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const mappedData = data.map(mapReservation);
+          console.log(`✅ Fetched ${data.length} reservations (attempt ${attempt})`);
+          setReservations(mappedData);
+          return;
+        } else if (res.status === 401 && attempt < maxRetries) {
+          console.log(`⏳ Session not ready (attempt ${attempt}), retrying in ${attempt * 200}ms...`);
+          await sleep(attempt * 200);
+          continue;
+        } else {
+          console.log("ℹ️ No reservations found or not authenticated");
+          setReservations([]);
+          return;
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching reservations (attempt ${attempt}):`, error);
+        if (attempt === maxRetries) {
+          setReservations([]);
+        }
+      }
+    }
+  }
+
   async function fetchReservations() {
     try {
+<<<<<<< HEAD
       const response = await fetch("/api/reservations", { credentials: "include" });
       if (response.ok) {
         const data = await response.json();
         setReservations(data);
+=======
+      const res = await fetch(`/api/reservations?_t=${Date.now()}`, { 
+        credentials: "include",
+        headers: { "Cache-Control": "no-cache" } 
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const mappedData = data.map(mapReservation);
+        console.log("✅ Fetched", data.length, "reservations");
+        setReservations(mappedData);
+      } else {
+        console.log("ℹ️ No reservations found or not authenticated");
+        setReservations([]);
+>>>>>>> master
       }
     } catch (error) {
-      console.error("Error fetching reservations:", error);
+      console.error("❌ Error fetching reservations:", error);
     }
   }
 
   function cancelReservation(id: string) {
+    console.log("🗑️ Canceling reservation:", id);
     setReservations((prev) => prev.filter((r) => r.id.toString() !== id));
   }
 
+<<<<<<< HEAD
   // ✅ 2. THIS IS THE MISSING FUNCTION CAUSING THE FREEZE
   function markReservationPaid(id: number, qrData: string) {
     console.log(`Checking off payment for reservation ${id}`);
@@ -170,6 +301,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Update the "current" reservation so the payment page knows it is done
     if (lastReservation && lastReservation.id === id) {
       setLastReservation({ ...lastReservation, isPaid: true, qrUrl: qrData });
+=======
+  async function markReservationPaid(id: number, qrData: string) {
+    try {
+      console.log(`💳 Processing payment for reservation ${id}...`);
+
+      const res = await fetch(`/api/reservations/${id}/pay`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qrUrl: qrData }),
+        credentials: "include"
+      });
+
+      if (!res.ok) throw new Error("Failed to update reservation on server");
+
+      const updatedReservation = await res.json();
+      console.log("✅ Payment processed successfully");
+
+      setReservations((prev) => 
+        prev.map((r) => (r.id === id ? updatedReservation : r))
+      );
+      setLastReservation(updatedReservation);
+
+    } catch (err) {
+      console.error("❌ Error marking reservation as paid:", err);
+      throw err;
+>>>>>>> master
     }
   }
 
@@ -187,7 +344,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         addReservation,
         fetchReservations,
         cancelReservation,
+<<<<<<< HEAD
         markReservationPaid, // ✅ 3. Exported here
+=======
+        markReservationPaid
+>>>>>>> master
       }}
     >
       {children}

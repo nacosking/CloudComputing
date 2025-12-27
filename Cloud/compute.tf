@@ -136,7 +136,7 @@ cd /home/ubuntu
 # Clone repository
 echo "Cloning repository..."
 rm -rf app
-git clone -b softcode https://github.com/nacosking/CloudComputing.git app
+git clone -b newsoftcode https://github.com/nacosking/CloudComputing.git app
 
 # Navigate to application directory
 cd /home/ubuntu/app/Reserve-Menu
@@ -150,6 +150,7 @@ fi
 echo "Installing npm packages..."
 npm install
 npm install @aws-sdk/client-s3 qrcode
+npm install connect-pg-simple
 
 # Build application
 echo "Building application..."

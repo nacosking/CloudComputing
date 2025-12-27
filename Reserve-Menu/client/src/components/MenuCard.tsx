@@ -64,7 +64,10 @@ export function MenuListItem({ item }: MenuCardProps) {
         </p>
       </div>
       <div className="font-medium text-primary text-lg">
+<<<<<<< HEAD
         {/* ✅ FIXED: Divide by 100 here too */}
+=======
+>>>>>>> master
         {formatCurrency(item.price / 100)}
       </div>
     </div>

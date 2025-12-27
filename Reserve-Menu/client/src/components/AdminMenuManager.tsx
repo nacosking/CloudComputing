@@ -9,7 +9,11 @@ interface MenuItem {
     id: number;
     category: string;
     name: string;
+<<<<<<< HEAD
     price: number;
+=======
+    price: number;    // Keeping as number for math, but form handles string conversionasd
+>>>>>>> master
     description: string;
 }
 

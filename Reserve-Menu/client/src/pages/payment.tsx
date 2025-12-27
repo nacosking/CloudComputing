@@ -55,6 +55,13 @@ export default function PaymentPage() {
     // We pass 'undefined' or the existing URL to avoid overwriting the DB with bad data.
     markReservationPaid(reservation.id, reservation.qrUrl);
 
+<<<<<<< HEAD
+=======
+    // ✅ FIXED: Removed the image upload logic causing the crash.
+    // We simply mark it paid using the data string.
+    markReservationPaid(reservation.id, qrData);
+
+>>>>>>> master
     setIsProcessing(false);
     setIsSuccess(true);
 
