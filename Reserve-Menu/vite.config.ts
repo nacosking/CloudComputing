@@ -30,7 +30,7 @@ export default defineConfig(async () => {
 
   return {
     plugins: plugins,
-    // THE FIX: This ensures your assets load correctly (fixes the MIME type error)
+    // FIX 1: Ensures assets load correctly using absolute paths
     base: "/",
     resolve: {
       alias: {
@@ -51,7 +51,24 @@ export default defineConfig(async () => {
     },
     server: {
       host: "0.0.0.0",
-      allowedHosts: true, // Note: In newer Vite versions, this might need to be an array or specific string
+      // Note: allowedHosts should typically be 'true' or an array in newer Vite versions
+      allowedHosts: true,
+
+      // FIX 2: HMR Configuration for Replit
+      // This tells the browser to connect via HTTPS (port 443) which prevents
+      // connection drops that look like random failures.
+      hmr: {
+        clientPort: 443,
+      },
+
+      // FIX 3: Polling (The solution to "Sometimes it works, sometimes it doesn't")
+      // Replit's file system sometimes misses save events. This forces Vite to check
+      // for file changes every 100ms.
+      watch: {
+        usePolling: true,
+        interval: 100,
+      },
+
       fs: {
         strict: true,
         deny: ["**/.*"],
