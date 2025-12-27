@@ -49,6 +49,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+function mapReservation(res: any): Reservation {
+  return {
+    ...res,
+    isPaid: res.status === "paid"  // ✅ Convert status to isPaid
+  };
+}
+
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -184,8 +192,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (res.ok) {
           const data = await res.json();
+          const mappedData = data.map(mapReservation);
           console.log(`✅ Fetched ${data.length} reservations (attempt ${attempt})`);
-          setReservations(data);
+          setReservations(mappedData);
           return;
         } else if (res.status === 401 && attempt < maxRetries) {
           console.log(`⏳ Session not ready (attempt ${attempt}), retrying in ${attempt * 200}ms...`);
@@ -214,8 +223,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         const data = await res.json();
+        const mappedData = data.map(mapReservation);
         console.log("✅ Fetched", data.length, "reservations");
-        setReservations(data);
+        setReservations(mappedData);
       } else {
         console.log("ℹ️ No reservations found or not authenticated");
         setReservations([]);
