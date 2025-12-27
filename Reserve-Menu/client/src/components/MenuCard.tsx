@@ -8,7 +8,7 @@ interface MenuCardProps {
 
 export function MenuCard({ item }: MenuCardProps) {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
@@ -16,9 +16,9 @@ export function MenuCard({ item }: MenuCardProps) {
     >
       <div className="aspect-[4/3] overflow-hidden bg-secondary/50">
         {item.imageUrl ? (
-          <img 
-            src={item.imageUrl} 
-            alt={item.name} 
+          <img
+            src={item.imageUrl}
+            alt={item.name}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
@@ -27,7 +27,7 @@ export function MenuCard({ item }: MenuCardProps) {
           </div>
         )}
       </div>
-      
+
       <div className="p-6">
         <div className="flex justify-between items-start mb-2">
           <h3 className="font-serif font-bold text-xl text-foreground group-hover:text-primary transition-colors">
@@ -63,7 +63,7 @@ export function MenuListItem({ item }: MenuCardProps) {
         </p>
       </div>
       <div className="font-medium text-primary text-lg">
-        {formatCurrency(item.price)}
+        {formatCurrency(item.price / 100)}
       </div>
     </div>
   );

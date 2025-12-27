@@ -27,18 +27,22 @@ export async function registerRoutes(
   // ============================================================
 
   // GET MENU: Fetches items and categories in one go
-  app.get('/api/menu', async (_req, res) => {
+  app.get('/api/menu', async (req, res) => {
     try {
       const result = await pool.query('SELECT * FROM menu_items ORDER BY id ASC');
       // Format for frontend tabs
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
       result.rows.forEach(item => {
         if (!menuData[item.category]) menuData[item.category] = [];
-        menuData[item.category].push(item);
+        menuData[item.category].push({
+          ...item,
+          price: `$${(item.price / 100).toFixed(2)}` // ✅ Convert cents to dollars
+        });
       });
       res.json(menuData);
     } catch (err) {
-      console.error("Menu Fetch Error:", err);
+      console.error("DB Error:", err);
+      // Fallback to empty if DB fails, so app doesn't crash
       res.json({ breakfast: [], lunch: [], dinner: [] });
     }
   });
