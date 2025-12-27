@@ -20,6 +20,7 @@ export interface Reservation {
   status: string;
   qrUrl?: string;
   createdAt?: string;
+  isPaid?: boolean;
 }
 
 interface RegisterData {
@@ -41,7 +42,6 @@ interface AuthContextType {
   addReservation: (reservation: Omit<Reservation, "id" | "status" | "createdAt" | "qrUrl">) => Promise<Reservation>;
   fetchReservations: () => Promise<void>;
   cancelReservation: (id: string) => void;
-  // ✅ ADDED: Missing function definition
   markReservationPaid: (id: number, qrData: string) => Promise<void>;
 }
 
@@ -57,10 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
+  // 🔥 FIXED: Don't auto-fetch on user change - we do it explicitly in login/register
   useEffect(() => {
-    if (user) {
-      fetchReservations();
-    } else {
+    if (!user) {
       setReservations([]);
     }
   }, [user]);
@@ -71,6 +70,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
+        // Fetch reservations after successful auth check
+        await new Promise(resolve => setTimeout(resolve, 50));
+        await fetchReservationsInternal();
       } else {
         setUser(null);
       }
@@ -97,6 +99,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const userData = await res.json();
     setUser(userData);
+    
+    // 🔥 FIX: Wait for session to be fully readable, then fetch reservations
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await fetchReservationsInternal();
   }
 
   async function register(data: RegisterData) {
@@ -114,6 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const userData = await res.json();
     setUser(userData);
+    
+    // 🔥 FIX: Wait for session to be fully readable, then fetch reservations
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await fetchReservationsInternal();
   }
 
   async function logout() {
@@ -155,30 +165,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function fetchReservations() {
+  // Internal function that doesn't need to be exposed
+  async function fetchReservationsInternal() {
     try {
+      console.log("🔍 Fetching reservations...");
       const response = await fetch("/api/reservations", { credentials: "include" });
       if (response.ok) {
         const data = await response.json();
+        console.log("✅ Fetched", data.length, "reservations");
         setReservations(data);
+      } else {
+        console.log("❌ Failed to fetch reservations:", response.status);
       }
     } catch (error) {
       console.error("Error fetching reservations:", error);
     }
   }
 
+  // Public function for manual refresh
+  async function fetchReservations() {
+    await fetchReservationsInternal();
+  }
+
   function cancelReservation(id: string) {
     setReservations((prev) => prev.filter((r) => r.id.toString() !== id));
   }
 
-  // Update reservation as paid in backend and local state
-  // ✅ UPDATED FUNCTION
   async function markReservationPaid(id: number, qrData: string) {
     try {
       console.log(`Processing payment for reservation ${id}...`);
 
-      // 1. Call the backend to save the change
-      // Note: We use "include" to ensure the session cookie is sent!
       const res = await fetch(`/api/reservations/${id}/pay`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -190,18 +206,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const updatedReservation = await res.json();
 
-      // 2. Update Local State (So UI updates without refresh)
       setReservations((prev) => 
         prev.map((r) => (r.id === id ? updatedReservation : r))
       );
-      // Update lastReservation too, so the success screen has the latest data
       setLastReservation(updatedReservation);
 
       console.log("✅ Payment status synced with server");
 
     } catch (err) {
       console.error("❌ Error marking reservation as paid:", err);
-      // You might want to show a toast error here
     }
   }
 
