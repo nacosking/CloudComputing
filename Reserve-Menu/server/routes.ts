@@ -27,7 +27,8 @@ export async function registerRoutes(
   // ============================================================
 
   // GET MENU: Fetches items and categories in one go
-  aapp.get('/api/menu', async (_req, res) => {
+  // GET MENU: Fetches items and categories in one go
+  app.get('/api/menu', async (_req, res) => {
     try {
       const items = await storage.getMenuItemsWithCategories();
 
@@ -38,17 +39,22 @@ export async function registerRoutes(
       };
 
       items.forEach(item => {
-        let catName = item.categoryName ? item.categoryName.toLowerCase() : 'uncategorized';
+        // 1. Get the category name from the DB
+        const dbCatName = item.categoryName ? item.categoryName.toLowerCase() : 'uncategorized';
 
-        // Mapping DB Category names to Frontend Tabs
-        if (catName === 'starters') catName = 'breakfast';
-        if (catName === 'mains') catName = 'lunch';
-        if (catName === 'desserts' || catName === 'drinks') catName = 'dinner';
+        // 2. Map them correctly (Matches both your seed names and potential legacy names)
+        let targetTab = '';
+        if (dbCatName === 'breakfast' || dbCatName === 'starters') targetTab = 'breakfast';
+        if (dbCatName === 'lunch' || dbCatName === 'mains') targetTab = 'lunch';
+        if (dbCatName === 'dinner' || dbCatName === 'desserts' || dbCatName === 'drinks') targetTab = 'dinner';
 
-        if (menuData[catName]) {
-          menuData[catName].push({
+        if (targetTab && menuData[targetTab]) {
+          menuData[targetTab].push({
             ...item,
-            price: `$${(item.price / 100).toFixed(2)}` // ✅ Convert cents to dollars
+            // Handle both string prices from DB and raw numbers
+            price: typeof item.price === 'number'
+              ? `$${(item.price / 100).toFixed(2)}`
+              : item.price
           });
         }
       });
