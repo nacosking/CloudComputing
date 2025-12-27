@@ -43,17 +43,17 @@ export function setupAuth(app: Express) {
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
-    name: "lumiere.sid",
+    // ✅ CHANGE THIS NAME to something new to bypass old stuck cookies
+    name: "lumiere_session_v2",
     cookie: {
-      // ✅ CRITICAL SETTINGS FOR HTTP + AWS ALB
-      secure: false,              // Allow HTTP (AWS ALB without SSL termination)
-      httpOnly: true,             // Prevent XSS
-      sameSite: "lax",           // MUST be "lax" for HTTP
+      // ✅ Keep secure FALSE for HTTP/AWS ALB
+      secure: false,
+      httpOnly: true,
+      sameSite: "lax",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      path: "/",                  // Available for all routes
-      // ✅ DO NOT set domain - let Express handle it automatically
+      path: "/",
     },
-    proxy: true,                   // ✅ CRITICAL: Trust the proxy for session cookies
+    proxy: true,
   };
 
   app.use(session(sessionSettings));
