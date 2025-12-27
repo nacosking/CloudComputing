@@ -29,10 +29,8 @@ export async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
-  // ✅ CRITICAL: Trust the AWS Load Balancer
   app.set("trust proxy", 1);
 
-  // Define session length (30 Days)
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
   const sessionSettings: session.SessionOptions = {
@@ -41,12 +39,12 @@ export function setupAuth(app: Express) {
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      secure: false, // Set to true when deploying to production with HTTPS
+      secure: false,
       httpOnly: true,
       maxAge: THIRTY_DAYS,
       sameSite: "lax",
     },
-    name: "lumiere.sid" // ✅ Custom session cookie name
+    name: "lumiere.sid"
   };
 
   console.log("🔐 Session config loaded:", {
@@ -60,7 +58,6 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // ✅ Log session status ONLY for auth-related requests (to reduce noise)
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/')) {
       console.log(`📋 ${req.method} ${req.path} - Auth: ${req.isAuthenticated()} - User: ${req.user?.id || 'none'}`);
@@ -68,35 +65,34 @@ export function setupAuth(app: Express) {
     next();
   });
 
-  // ✅ Configure Passport to accept BOTH username AND email
+  // ✅ SIMPLIFIED: Passport accepts email directly as username
   passport.use(
     new LocalStrategy(
       {
-        usernameField: "username", // This will be used to accept the login field
+        usernameField: "email", // ✅ Changed to "email" to match login form
         passwordField: "password"
       },
-      async (username, password, done) => {
+      async (email, password, done) => {
         try {
-          console.log("🔐 Login attempt with:", username);
+          console.log("🔐 Login attempt for email:", email);
           
-          // Try to find user by username first, then by email
-          let user = await storage.getUserByUsername(username);
-          if (!user) {
-            user = await storage.getUserByEmail(username);
-          }
+          // Find user by email
+          const user = await storage.getUserByEmail(email);
 
           if (!user) {
-            console.log("❌ User not found:", username);
+            console.log("❌ User not found:", email);
             return done(null, false, { message: "Invalid credentials" });
           }
 
+          console.log("🔍 Found user:", user.email, "Checking password...");
+          
           const isValidPassword = await comparePasswords(password, user.password);
           if (!isValidPassword) {
-            console.log("❌ Invalid password for:", username);
+            console.log("❌ Invalid password for:", email);
             return done(null, false, { message: "Invalid credentials" });
           }
 
-          console.log("✅ Login successful:", user.email, "userId:", user.id);
+          console.log("✅ Password valid! Login successful for:", user.email, "userId:", user.id);
           return done(null, user);
         } catch (err) {
           console.error("❌ Login error:", err);
@@ -156,15 +152,22 @@ export function setupAuth(app: Express) {
 
       console.log("✅ User registered:", user.email, "userId:", user.id);
 
-      // ✅ Auto-login after registration
       req.login(user, (err) => {
         if (err) {
           console.error("❌ Auto-login error:", err);
           return next(err);
         }
-        console.log("✅ Auto-login successful for:", user.email);
-        const { password: _, ...safeUser } = user;
-        res.status(201).json(safeUser);
+        
+        // ✅ CRITICAL FIX: Save session before responding
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("❌ Session save error:", saveErr);
+            return next(saveErr);
+          }
+          console.log("✅ Auto-login successful for:", user.email);
+          const { password: _, ...safeUser } = user;
+          res.status(201).json(safeUser);
+        });
       });
     } catch (err) {
       console.error("❌ Registration error:", err);
@@ -172,19 +175,9 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // ✅ FIXED Login endpoint - This was the main issue!
+  // ✅ SIMPLIFIED Login endpoint - No more modifiedReq hack!
   app.post("/api/login", (req, res, next) => {
     console.log("🔐 Login request for:", req.body.email);
-
-    // ✅ Create a modified request body that passport can use
-    // Passport LocalStrategy expects "username" field, but we're sending "email"
-    const modifiedReq = {
-      ...req,
-      body: {
-        username: req.body.email, // Use email as username
-        password: req.body.password
-      }
-    };
 
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) {
@@ -197,18 +190,25 @@ export function setupAuth(app: Express) {
         return res.status(401).json({ message: info?.message || "Invalid credentials" });
       }
 
-      // ✅ CRITICAL: Use the ORIGINAL req object (not modifiedReq) for login
-      req.login(user, (err) => {
-        if (err) {
-          console.error("❌ Session creation error:", err);
-          return next(err);
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("❌ Session creation error:", loginErr);
+          return next(loginErr);
         }
 
-        console.log("✅ Login successful:", user.email, "Session ID:", req.sessionID);
-        const { password: _, ...safeUser } = user;
-        res.status(200).json(safeUser);
+        // ✅ CRITICAL FIX: Save session BEFORE sending response
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("❌ Session save error:", saveErr);
+            return next(saveErr);
+          }
+
+          console.log("✅ Login successful:", user.email, "Session ID:", req.sessionID);
+          const { password: _, ...safeUser } = user;
+          res.status(200).json(safeUser);
+        });
       });
-    })(modifiedReq, res, next);
+    })(req, res, next);
   });
 
   // Logout endpoint
