@@ -57,23 +57,50 @@ export class DatabaseStorage implements IStorage {
     console.log("✅ Memory session store initialized (with sticky sessions)");
   }
   
+  // ============================================================
+  //   FIXED: MARK RESERVATION PAID
+  // ============================================================
   async markReservationPaid(id: number, qrData: string): Promise<Reservation> {
     // 1. Generate QR code as PNG buffer
-    const qrBuffer = await QRCode.toBuffer(qrData, {...});
+    const qrBuffer = await QRCode.toBuffer(qrData, {
+      errorCorrectionLevel: 'H',
+      type: 'png',
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
     
     // 2. Upload to S3
     const fileName = `reservations/${id}/payment_qr_${Date.now()}.png`;
-    await s3Client.send(new PutObjectCommand({...}));
+    
+    await s3Client.send(new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: fileName,
+      Body: qrBuffer,
+      ContentType: "image/png"
+    }));
     
     // 3. Get S3 URL
     const qrUrl = `https://${BUCKET_NAME}.s3.amazonaws.com/${fileName}`;
     
-    // 4. Update database with S3 URL (not JSON string!)
-    await db.update(reservations)
+    // 4. Update database with S3 URL
+    // CRITICAL FIX: Added .where() clause to only update the specific reservation
+    const [updated] = await db.update(reservations)
       .set({ 
         status: "paid",
-        qrUrl: qrUrl  // ✅ Stores S3 URL
-      });
+        qrUrl: qrUrl 
+      })
+      .where(eq(reservations.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Reservation ${id} not found`);
+    }
+
+    return updated;
   }
 
   // ============================================================
@@ -187,7 +214,17 @@ export class DatabaseStorage implements IStorage {
         time: reservation.time,
         guests: reservation.guests
       });
-      const qrBuffer = await QRCode.toBuffer(qrData);
+      
+      const qrBuffer = await QRCode.toBuffer(qrData, {
+        errorCorrectionLevel: 'H',
+        type: 'png',
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
       const fileName = `reservations/${reservation.id}/qr_${Date.now()}_${Math.floor(Math.random() * 1000)}.png`;
       
       await s3Client.send(new PutObjectCommand({
