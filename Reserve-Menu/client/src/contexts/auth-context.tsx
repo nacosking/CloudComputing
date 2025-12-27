@@ -100,8 +100,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userData = await res.json();
     setUser(userData);
     
-    // 🔥 FIX: Increased wait time + retry logic handles edge cases
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // 🔥 FIX 1: Wait 500ms (half a second) to let the cookie settle
+    console.log("⏳ Login complete, waiting for cookie to settle...");
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 🔥 FIX 2: Now fetch with retry logic
     await fetchReservationsInternal();
   }
 
