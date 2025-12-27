@@ -31,7 +31,10 @@ export async function registerRoutes(
       const menuData: Record<string, any[]> = { breakfast: [], lunch: [], dinner: [] };
       result.rows.forEach(item => {
         if (!menuData[item.category]) menuData[item.category] = [];
-        menuData[item.category].push(item);
+        menuData[item.category].push({
+          ...item,
+          price: `$${(item.price / 100).toFixed(2)}` // ✅ Convert cents to dollars
+        });
       });
       res.json(menuData);
     } catch (err) {
