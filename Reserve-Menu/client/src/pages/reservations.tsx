@@ -6,8 +6,7 @@ import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import { Trash2, Calendar, Users, Clock, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
-// ✅ ADDED: Import the QR Code generator
-import { QRCodeCanvas } from "qrcode.react";
+// Removed QRCodeCanvas since we are using S3 images now
 
 export default function ReservationsPage() {
   const [, navigate] = useLocation();
@@ -141,8 +140,8 @@ export default function ReservationsPage() {
                   </div>
 
                   <div className="flex flex-col justify-between">
-                    {/* ✅ UPDATED LOGIC: Draw QR Code from Text */}
-                    {reservation.isPaid && reservation.qrUrl ? (
+                    {/* ✅ UPDATED LOGIC: Display S3 Image URL */}
+                    {reservation.isPaid ? (
                       <div className="bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20 rounded-lg p-6 mb-6">
                         <div className="flex items-center gap-2 mb-4">
                           <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -152,14 +151,20 @@ export default function ReservationsPage() {
                           Show this QR code when you arrive at the restaurant.
                         </p>
 
-                        {/* ⬇️ CHANGED: Use QRCodeCanvas instead of <img> */}
                         <div className="bg-white rounded-lg p-4 flex justify-center border border-primary/30 w-fit mx-auto">
-                          <QRCodeCanvas
-                            value={reservation.qrUrl}
-                            size={150}
-                            level="H"
-                            includeMargin={true}
-                          />
+                          {reservation.qrUrl ? (
+                            // ✅ CORRECT: Use <img> for S3 URLs
+                            <img
+                              src={reservation.qrUrl}
+                              alt="Reservation QR Code"
+                              className="w-[150px] h-[150px] object-contain"
+                            />
+                          ) : (
+                            // Fallback if URL is missing
+                            <div className="w-[150px] h-[150px] flex items-center justify-center bg-gray-100 text-gray-400 text-xs text-center">
+                              No QR Image Found<br />(Check S3 Settings)
+                            </div>
+                          )}
                         </div>
 
                         <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20 text-center">
