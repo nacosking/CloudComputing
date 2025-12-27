@@ -227,13 +227,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getReservationsByEmail(email: string): Promise<Reservation[]> {
-    const reservations = await db.select().from(reservations).where(eq(reservations.email, email));
+    // ✅ FIXED: Renamed local variable to 'rows' (or userReservations) to avoid conflict
+    const rows = await db.select().from(reservations).where(eq(reservations.email, email));
 
     // ✅ Regenerate signed URLs if they exist but might be expired
     const updated = await Promise.all(
-      reservations.map(async (r) => {
+      rows.map(async (r) => {
         if (r.qrUrl && r.qrUrl.includes('X-Amz-Signature')) {
-          // This is a signed URL that might be expired
           try {
             const key = r.qrUrl.split('.amazonaws.com/')[1]?.split('?')[0];
             if (key) {

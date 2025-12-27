@@ -43,9 +43,9 @@ provider "aws" {
 
 # 1. AWS Academy Lab Role (CRITICAL: Used to bypass role creation restrictions)
 # This imports the existing role so we can attach policies to it.
-data "aws_iam_role" "lab_role" {
-  name = "LabRole"
-}
+# data "aws_iam_role" "lab_role" {
+#   name = "LabRole"
+# }
 
 data "aws_caller_identity" "current" {}
 
