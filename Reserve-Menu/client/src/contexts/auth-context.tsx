@@ -47,19 +47,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ✅ Helper: Wait with exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [lastReservation, setLastReservation] = useState<Reservation | null>(null);
 
-  // ✅ Run checkAuth ONLY when the app starts
   useEffect(() => {
     checkAuth();
   }, []);
-
-  // ✅ REMOVED: The useEffect that auto-fetched reservations
-  // We control this manually now for strict ordering
 
   async function checkAuth() {
     try {
@@ -70,10 +69,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userData = await res.json();
         console.log("✅ User authenticated:", userData.email);
         setUser(userData);
-        // ✅ STRICT ORDER: Only fetch after we know who the user is
         await fetchReservations(); 
       } else {
-        // 401 is normal on page load - user is just not logged in
         console.log("ℹ️ No active session (this is normal on page load)");
         setUser(null);
       }
@@ -88,7 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function login(email: string, password: string) {
     console.log("🔐 Logging in:", email);
     
-    // 1. Perform Login
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -105,11 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("✅ Login successful:", userData.email);
     setUser(userData);
 
-    // 2. ✅ STRICT ORDER: The 'await' above ensures the browser has 
-    // received the OK response and the Set-Cookie header.
-    // Now we can safely ask for reservations.
+    // ✅ CRITICAL: Wait a moment for session to fully propagate
+    await sleep(300);
+    
     console.log("📋 Fetching user reservations...");
-    await fetchReservations();
+    await fetchReservationsWithRetry();
   }
 
   async function register(data: RegisterData) {
@@ -131,9 +127,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("✅ Registration successful:", userData.email);
     setUser(userData);
     
-    // ✅ STRICT ORDER: Wait for registration to complete, then fetch
+    // ✅ CRITICAL: Wait for session to propagate
+    await sleep(300);
+    
     console.log("📋 Fetching user reservations...");
-    await fetchReservations();
+    await fetchReservationsWithRetry();
   }
 
   async function logout() {
@@ -179,10 +177,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // ✅ Generic fetch function (No retry logic needed if cookies work properly)
+  // ✅ NEW: Retry logic for session propagation issues
+  async function fetchReservationsWithRetry(maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetch(`/api/reservations?_t=${Date.now()}`, { 
+          credentials: "include",
+          headers: { "Cache-Control": "no-cache" } 
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          console.log(`✅ Fetched ${data.length} reservations (attempt ${attempt})`);
+          setReservations(data);
+          return; // Success!
+        } else if (res.status === 401 && attempt < maxRetries) {
+          // Session not ready yet, wait and retry
+          console.log(`⏳ Session not ready (attempt ${attempt}), retrying in ${attempt * 200}ms...`);
+          await sleep(attempt * 200); // Exponential backoff
+          continue;
+        } else {
+          console.log("ℹ️ No reservations found or not authenticated");
+          setReservations([]);
+          return;
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching reservations (attempt ${attempt}):`, error);
+        if (attempt === maxRetries) {
+          setReservations([]);
+        }
+      }
+    }
+  }
+
   async function fetchReservations() {
     try {
-      // Timestamp prevents browser caching old 401 errors
       const res = await fetch(`/api/reservations?_t=${Date.now()}`, { 
         credentials: "include",
         headers: { "Cache-Control": "no-cache" } 

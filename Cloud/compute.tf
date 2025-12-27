@@ -150,6 +150,7 @@ fi
 echo "Installing npm packages..."
 npm install
 npm install @aws-sdk/client-s3 qrcode
+npm install connect-pg-simple
 
 # Build application
 echo "Building application..."

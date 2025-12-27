@@ -29,38 +29,51 @@ export async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  // ✅ CRITICAL: Trust proxy is required for ALB
   app.set("trust proxy", 1);
 
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const isProduction = process.env.NODE_ENV === "production";
 
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "r8q/+&1LM3)Cd*zAGpx1xm{NeQHc;#",
     resave: false,
     saveUninitialized: false,
-    store: storage.sessionStore,
+    store: storage.sessionStore, // Now using PostgreSQL store
     cookie: {
-      secure: false,
+      secure: false, // ✅ Keep false even behind ALB (ALB terminates HTTPS)
       httpOnly: true,
       maxAge: THIRTY_DAYS,
       sameSite: "lax",
+      // ✅ CRITICAL: Don't set domain for ALB, let browser handle it
+      path: "/",
     },
-    name: "lumiere.sid"
+    name: "lumiere.sid",
+    rolling: true, // ✅ Refresh session on each request
   };
 
   console.log("🔐 Session config loaded:", {
     env: app.get("env"),
+    isProduction,
     secure: sessionSettings.cookie?.secure,
     maxAgeDays: (sessionSettings.cookie?.maxAge || 0) / (24 * 60 * 60 * 1000),
-    trustProxy: app.get("trust proxy")
+    trustProxy: app.get("trust proxy"),
+    store: storage.sessionStore.constructor.name
   });
 
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // ✅ Enhanced logging with session ID
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/')) {
-      console.log(`📋 ${req.method} ${req.path} - Auth: ${req.isAuthenticated()} - User: ${req.user?.id || 'none'}`);
+      console.log(`📋 ${req.method} ${req.path}`, {
+        auth: req.isAuthenticated(),
+        userId: req.user?.id || 'none',
+        sessionId: req.sessionID?.slice(0, 8) + '...',
+        hasCookie: !!req.headers.cookie
+      });
     }
     next();
   });
@@ -73,7 +86,7 @@ export function setupAuth(app: Express) {
       },
       async (email, password, done) => {
         try {
-          console.log("🔐 Login attempt for email:", email);
+          console.log("🔍 Login attempt for email:", email);
           
           const user = await storage.getUserByEmail(email);
 
@@ -107,7 +120,7 @@ export function setupAuth(app: Express) {
 
   passport.deserializeUser(async (id: number, done) => {
     try {
-      console.log("🔍 Deserializing user:", id);
+      console.log("🔓 Deserializing user:", id);
       const user = await storage.getUser(id);
       if (!user) {
         console.log("❌ User not found during deserialization:", id);
@@ -125,7 +138,6 @@ export function setupAuth(app: Express) {
   //   AUTHENTICATION ROUTES
   // ============================================================
 
-  // Register endpoint
   app.post("/api/register", async (req, res, next) => {
     try {
       console.log("📝 Registration attempt:", req.body.email);
@@ -150,14 +162,12 @@ export function setupAuth(app: Express) {
 
       console.log("✅ User registered:", user.email, "userId:", user.id);
 
-      // ✅ PROPER FIX: Use callback-based approach with explicit save
       req.login(user, (err) => {
         if (err) {
           console.error("❌ Auto-login error:", err);
           return next(err);
         }
         
-        // Force session save and wait for completion
         req.session.save((saveErr) => {
           if (saveErr) {
             console.error("❌ Session save error:", saveErr);
@@ -175,7 +185,6 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // ✅ Login endpoint with proper session handling
   app.post("/api/login", (req, res, next) => {
     console.log("🔐 Login request for:", req.body.email);
 
@@ -196,7 +205,6 @@ export function setupAuth(app: Express) {
           return next(loginErr);
         }
 
-        // ✅ PROPER FIX: Explicitly save session before responding
         req.session.save((saveErr) => {
           if (saveErr) {
             console.error("❌ Session save error:", saveErr);
@@ -205,13 +213,16 @@ export function setupAuth(app: Express) {
 
           console.log("✅ Login successful:", user.email, "Session ID:", req.sessionID);
           const { password: _, ...safeUser } = user;
+          
+          // ✅ Set cookie explicitly in response header
+          res.setHeader('Set-Cookie', `lumiere.sid=${req.sessionID}; Path=/; HttpOnly; Max-Age=${THIRTY_DAYS / 1000}; SameSite=Lax`);
+          
           res.status(200).json(safeUser);
         });
       });
     })(req, res, next);
   });
 
-  // Logout endpoint
   app.post("/api/logout", (req, res, next) => {
     const userEmail = req.user?.email || "unknown";
     console.log("👋 Logout request from:", userEmail);
@@ -233,9 +244,13 @@ export function setupAuth(app: Express) {
     });
   });
 
-  // Get current user endpoint
   app.get("/api/user", (req, res) => {
-    console.log("👤 User check - Auth:", req.isAuthenticated(), "User:", req.user?.id || "none");
+    console.log("👤 User check", {
+      auth: req.isAuthenticated(),
+      userId: req.user?.id || 'none',
+      sessionId: req.sessionID?.slice(0, 8) + '...',
+      hasCookie: !!req.headers.cookie
+    });
 
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
@@ -245,7 +260,6 @@ export function setupAuth(app: Express) {
   });
 }
 
-// Middleware to check if user is authenticated
 export function isAuthenticated(req: any, res: any, next: any) {
   if (req.isAuthenticated()) {
     return next();
@@ -253,7 +267,6 @@ export function isAuthenticated(req: any, res: any, next: any) {
   res.status(401).json({ message: "Not authenticated" });
 }
 
-// Middleware to check if user is admin
 export function isAdmin(req: any, res: any, next: any) {
   if (req.isAuthenticated() && req.user?.isAdmin) {
     return next();

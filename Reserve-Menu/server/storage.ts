@@ -8,13 +8,19 @@ import {
 } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
+import { Pool } from "pg";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import QRCode from "qrcode";
 
-const MemoryStore = createMemoryStore(session);
+const PgSession = connectPgSimple(session);
 const s3Client = new S3Client({ region: "us-east-1" });
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || "";
+
+// ✅ Create a PostgreSQL connection pool for sessions
+const sessionPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -22,28 +28,23 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
-  // Menu Methods
   getCategories(): Promise<Category[]>;
   getCategory(id: number): Promise<Category | undefined>;
   getMenuItems(categoryId?: number): Promise<MenuItem[]>;
   getMenuItem(id: number): Promise<MenuItem | undefined>;
   getMenuItemsWithCategories(): Promise<(MenuItem & { categoryName: string; categorySlug?: string })[]>;
   
-  // Admin Methods
   createCategory(category: InsertCategory): Promise<Category>;
   createMenuItem(item: InsertMenuItem): Promise<MenuItem>;
   updateMenuItem(id: number, item: Partial<InsertMenuItem>): Promise<MenuItem>;
   deleteMenuItem(id: number): Promise<void>;
 
-  // Reservation Methods
   createReservation(reservation: InsertReservation): Promise<Reservation>;
   getReservations(): Promise<Reservation[]>;
   getReservationsByEmail(email: string): Promise<Reservation[]>;
   getReservationsByUserId(userId: number): Promise<Reservation[]>;
-  getReservationsByUserIdOrEmail(userId: number, email: string): Promise<Reservation[]>; // ✅ NEW
+  getReservationsByUserIdOrEmail(userId: number, email: string): Promise<Reservation[]>;
   updateReservationQrUrl(id: number, qrUrl: string): Promise<Reservation>;
-  
-  // Payment Method
   markReservationPaid(id: number, qrUrl: string): Promise<Reservation>;
   
   sessionStore: session.Store;
@@ -53,7 +54,14 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new MemoryStore({ checkPeriod: 86400000 });
+    // ✅ FIXED: Use PostgreSQL session store instead of memory
+    this.sessionStore = new PgSession({
+      pool: sessionPool,
+      tableName: "session", // Default table name
+      createTableIfMissing: true, // Auto-create session table
+    });
+    
+    console.log("✅ PostgreSQL session store initialized");
   }
   
   async markReservationPaid(id: number, qrUrl: string): Promise<Reservation> {
@@ -171,7 +179,6 @@ export class DatabaseStorage implements IStorage {
   async createReservation(insertReservation: InsertReservation): Promise<Reservation> {
     const [reservation] = await db.insert(reservations).values(insertReservation).returning();
     
-    // Generate QR code and upload to S3
     try {
       const qrData = JSON.stringify({ 
         id: reservation.id, 
@@ -210,7 +217,6 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(reservations).where(eq(reservations.userId, userId)).orderBy(reservations.createdAt);
   }
 
-  // ✅ NEW METHOD: Fetch by EITHER userId OR email
   async getReservationsByUserIdOrEmail(userId: number, email: string): Promise<Reservation[]> {
     return await db
       .select()
