@@ -65,18 +65,16 @@ export function setupAuth(app: Express) {
     next();
   });
 
-  // ✅ SIMPLIFIED: Passport accepts email directly as username
   passport.use(
     new LocalStrategy(
       {
-        usernameField: "email", // ✅ Changed to "email" to match login form
+        usernameField: "email",
         passwordField: "password"
       },
       async (email, password, done) => {
         try {
           console.log("🔐 Login attempt for email:", email);
           
-          // Find user by email
           const user = await storage.getUserByEmail(email);
 
           if (!user) {
@@ -152,21 +150,26 @@ export function setupAuth(app: Express) {
 
       console.log("✅ User registered:", user.email, "userId:", user.id);
 
+      // 🔥 FIX: Double-save to ensure session persists to database
       req.login(user, (err) => {
         if (err) {
           console.error("❌ Auto-login error:", err);
           return next(err);
         }
         
-        // ✅ CRITICAL FIX: Save session before responding
+        // Force an explicit save AFTER req.login completes
         req.session.save((saveErr) => {
           if (saveErr) {
             console.error("❌ Session save error:", saveErr);
             return next(saveErr);
           }
-          console.log("✅ Auto-login successful for:", user.email);
-          const { password: _, ...safeUser } = user;
-          res.status(201).json(safeUser);
+          
+          // Wait a tick to ensure DB write completes
+          setImmediate(() => {
+            console.log("✅ Auto-login successful for:", user.email, "Session:", req.sessionID);
+            const { password: _, ...safeUser } = user;
+            res.status(201).json(safeUser);
+          });
         });
       });
     } catch (err) {
@@ -175,7 +178,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // ✅ SIMPLIFIED Login endpoint - No more modifiedReq hack!
+  // 🔥 FIX: Login endpoint with guaranteed session persistence
   app.post("/api/login", (req, res, next) => {
     console.log("🔐 Login request for:", req.body.email);
 
@@ -196,16 +199,19 @@ export function setupAuth(app: Express) {
           return next(loginErr);
         }
 
-        // ✅ CRITICAL FIX: Save session BEFORE sending response
+        // Double-save: req.login saves internally, then we force another save
         req.session.save((saveErr) => {
           if (saveErr) {
             console.error("❌ Session save error:", saveErr);
             return next(saveErr);
           }
 
-          console.log("✅ Login successful:", user.email, "Session ID:", req.sessionID);
-          const { password: _, ...safeUser } = user;
-          res.status(200).json(safeUser);
+          // Use setImmediate to ensure the save completes before response
+          setImmediate(() => {
+            console.log("✅ Login successful:", user.email, "Session ID:", req.sessionID);
+            const { password: _, ...safeUser } = user;
+            res.status(200).json(safeUser);
+          });
         });
       });
     })(req, res, next);
