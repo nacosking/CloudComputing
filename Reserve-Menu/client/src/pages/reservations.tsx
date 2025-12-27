@@ -6,12 +6,9 @@ import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import { Trash2, Calendar, Users, Clock, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
-<<<<<<< HEAD
 // Removed QRCodeCanvas since we are using S3 images now
-=======
 // ✅ ADDED: Import the QR Code generator
 import { QRCodeCanvas } from "qrcode.react";
->>>>>>> master
 
 export default function ReservationsPage() {
   const [, navigate] = useLocation();
@@ -145,13 +142,10 @@ export default function ReservationsPage() {
                   </div>
 
                   <div className="flex flex-col justify-between">
-<<<<<<< HEAD
                     {/* ✅ UPDATED LOGIC: Display S3 Image URL */}
                     {reservation.isPaid ? (
-=======
-                    {/* ✅ UPDATED LOGIC: Draw QR Code from Text */}
+                      {/* ✅ UPDATED LOGIC: Draw QR Code from Text */ }
                     {reservation.isPaid && reservation.qrUrl ? (
->>>>>>> master
                       <div className="bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20 rounded-lg p-6 mb-6">
                         <div className="flex items-center gap-2 mb-4">
                           <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -161,7 +155,6 @@ export default function ReservationsPage() {
                           Show this QR code when you arrive at the restaurant.
                         </p>
 
-<<<<<<< HEAD
                         <div className="bg-white rounded-lg p-4 flex justify-center border border-primary/30 w-fit mx-auto">
                           {reservation.qrUrl ? (
                             // ✅ CORRECT: Use <img> for S3 URLs
@@ -176,46 +169,44 @@ export default function ReservationsPage() {
                               No QR Image Found<br />(Check S3 Settings)
                             </div>
                           )}
-=======
-                        {/* ⬇️ CHANGED: Use QRCodeCanvas instead of <img> */}
-                        <div className="bg-white rounded-lg p-4 flex justify-center border border-primary/30 w-fit mx-auto">
-                          <QRCodeCanvas
-                            value={reservation.qrUrl}
-                            size={150}
-                            level="H"
-                            includeMargin={true}
-                          />
->>>>>>> master
-                        </div>
+                          {/* ⬇️ CHANGED: Use QRCodeCanvas instead of <img> */}
+                          <div className="bg-white rounded-lg p-4 flex justify-center border border-primary/30 w-fit mx-auto">
+                            <QRCodeCanvas
+                              value={reservation.qrUrl}
+                              size={150}
+                              level="H"
+                              includeMargin={true}
+                            />
+                          </div>
 
-                        <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20 text-center">
-                          <p className="text-xs text-muted-foreground mb-1">Confirmation ID</p>
-                          <p className="font-mono text-xs font-bold text-primary">{reservation.id}</p>
+                          <div className="mt-4 p-3 bg-primary/5 rounded border border-primary/20 text-center">
+                            <p className="text-xs text-muted-foreground mb-1">Confirmation ID</p>
+                            <p className="font-mono text-xs font-bold text-primary">{reservation.id}</p>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-6 mb-6">
-                        <h4 className="font-serif text-lg font-bold mb-3">Confirmation</h4>
-                        <p className="text-muted-foreground text-sm mb-4">
-                          Your table is reserved and waiting for you.
-                          Please arrive 5-10 minutes early.
-                        </p>
-                        <div className="p-3 bg-background rounded border border-primary/30">
-                          <p className="text-xs text-muted-foreground mb-1">Reservation ID</p>
-                          <p className="font-mono text-sm font-bold text-primary">{reservation.id}</p>
+                        ) : (
+                        <div className="bg-primary/5 border border-primary/20 rounded-lg p-6 mb-6">
+                          <h4 className="font-serif text-lg font-bold mb-3">Confirmation</h4>
+                          <p className="text-muted-foreground text-sm mb-4">
+                            Your table is reserved and waiting for you.
+                            Please arrive 5-10 minutes early.
+                          </p>
+                          <div className="p-3 bg-background rounded border border-primary/30">
+                            <p className="text-xs text-muted-foreground mb-1">Reservation ID</p>
+                            <p className="font-mono text-sm font-bold text-primary">{reservation.id}</p>
+                          </div>
                         </div>
-                      </div>
                     )}
 
-                    <Button
-                      onClick={() => handleCancel(reservation.id.toString())}
-                      variant="ghost"
-                      className="w-full border border-red-200 text-red-600 hover:bg-red-50 group"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                      Cancel Reservation
-                    </Button>
-                  </div>
+                        <Button
+                          onClick={() => handleCancel(reservation.id.toString())}
+                          variant="ghost"
+                          className="w-full border border-red-200 text-red-600 hover:bg-red-50 group"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                          Cancel Reservation
+                        </Button>
+                      </div>
                 </div>
               </motion.div>
             ))}
