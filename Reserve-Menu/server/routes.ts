@@ -27,7 +27,7 @@ export async function registerRoutes(
   // ============================================================
 
   // GET MENU: Fetches items and categories in one go
-  app.get('/api/menu', async (_req, res) => {
+  aapp.get('/api/menu', async (_req, res) => {
     try {
       const items = await storage.getMenuItemsWithCategories();
 
@@ -46,7 +46,10 @@ export async function registerRoutes(
         if (catName === 'desserts' || catName === 'drinks') catName = 'dinner';
 
         if (menuData[catName]) {
-          menuData[catName].push(item);
+          menuData[catName].push({
+            ...item,
+            price: `$${(item.price / 100).toFixed(2)}` // ✅ Convert cents to dollars
+          });
         }
       });
 
